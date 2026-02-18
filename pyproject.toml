@@ -8,7 +8,16 @@ version = "0.1.0"
 description = "Code for RAMMP."
 readme = "README.md"
 requires-python = ">=3.10"
-dependencies = []
+dependencies = [
+    "protobuf==3.19.0
+    "multiprocess",
+    "pyyaml",
+    "rospkg",
+    "catkin_pkg",
+    "empy",
+    "paramiko",
+    "PyAudio",
+]
 
 [project.optional-dependencies]
 full = [
@@ -19,7 +28,6 @@ full = [
     "prpl-utils@git+https://github.com/Princeton-Robot-Planning-and-Learning/prpl-mono.git#subdirectory=prpl-utils",
     "tomsutils@git+https://github.com/tomsilver/toms-utils.git",
     "opencv-python",
-    "multiprocess",
     "scikit-learn",
     "scikit-image",
     "yacs",
@@ -27,7 +35,6 @@ full = [
     "chumpy",
     "open3d",
     "face-alignment",
-    "paramiko",
     "numpy",
     "defusedxml",
     "twisted",
@@ -35,12 +42,8 @@ full = [
     "autobahn",
     "tornado",
     "bson",
-    "pyyaml",
     "gTTS",
     "playsound",
-    "rospkg",
-    "catkin_pkg",
-    "empy",
     "black",
     "docformatter",
     "isort",
