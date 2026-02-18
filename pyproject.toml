@@ -9,7 +9,7 @@ description = "Code for RAMMP."
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
-    "protobuf==3.19.0
+    "protobuf==3.19.0",
     "multiprocess",
     "pyyaml",
     "rospkg",

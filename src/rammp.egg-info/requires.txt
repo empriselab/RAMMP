@@ -1,12 +1,20 @@
+protobuf==3.19.0
+multiprocess
+pyyaml
+rospkg
+catkin_pkg
+empy
+paramiko
+PyAudio
+
+[full]
 pybullet_helpers @ git+https://github.com/Princeton-Robot-Planning-and-Learning/prpl-mono.git#subdirectory=pybullet-helpers
 pyaudio
 imageio[ffmpeg]
-ruckig
 relational_structs @ git+https://github.com/Princeton-Robot-Planning-and-Learning/prpl-mono.git#subdirectory=relational-structs
 prpl-utils @ git+https://github.com/Princeton-Robot-Planning-and-Learning/prpl-mono.git#subdirectory=prpl-utils
 tomsutils @ git+https://github.com/tomsilver/toms-utils.git
 opencv-python
-multiprocess
 scikit-learn
 scikit-image
 yacs
@@ -14,7 +22,6 @@ kornia
 chumpy
 open3d
 face-alignment
-paramiko
 numpy
 defusedxml
 twisted
@@ -22,14 +29,8 @@ pyOpenSSL
 autobahn
 tornado
 bson
-pyyaml
 gTTS
 playsound
-rospkg
-catkin_pkg
-empy
-
-[develop]
 black
 docformatter
 isort

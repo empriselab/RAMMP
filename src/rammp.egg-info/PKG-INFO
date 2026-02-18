@@ -4,44 +4,45 @@ Version: 0.1.0
 Summary: Code for RAMMP.
 Requires-Python: >=3.10
 Description-Content-Type: text/markdown
-Requires-Dist: pybullet_helpers @ git+https://github.com/Princeton-Robot-Planning-and-Learning/prpl-mono.git#subdirectory=pybullet-helpers
-Requires-Dist: pyaudio
-Requires-Dist: imageio[ffmpeg]
-Requires-Dist: ruckig
-Requires-Dist: relational_structs @ git+https://github.com/Princeton-Robot-Planning-and-Learning/prpl-mono.git#subdirectory=relational-structs
-Requires-Dist: prpl-utils @ git+https://github.com/Princeton-Robot-Planning-and-Learning/prpl-mono.git#subdirectory=prpl-utils
-Requires-Dist: tomsutils @ git+https://github.com/tomsilver/toms-utils.git
-Requires-Dist: opencv-python
+Requires-Dist: protobuf==3.19.0
 Requires-Dist: multiprocess
-Requires-Dist: scikit-learn
-Requires-Dist: scikit-image
-Requires-Dist: yacs
-Requires-Dist: kornia
-Requires-Dist: chumpy
-Requires-Dist: open3d
-Requires-Dist: face-alignment
-Requires-Dist: paramiko
-Requires-Dist: numpy
-Requires-Dist: defusedxml
-Requires-Dist: twisted
-Requires-Dist: pyOpenSSL
-Requires-Dist: autobahn
-Requires-Dist: tornado
-Requires-Dist: bson
 Requires-Dist: pyyaml
-Requires-Dist: gTTS
-Requires-Dist: playsound
 Requires-Dist: rospkg
 Requires-Dist: catkin_pkg
 Requires-Dist: empy
-Provides-Extra: develop
-Requires-Dist: black; extra == "develop"
-Requires-Dist: docformatter; extra == "develop"
-Requires-Dist: isort; extra == "develop"
-Requires-Dist: mypy; extra == "develop"
-Requires-Dist: pylint>=2.14.5; extra == "develop"
-Requires-Dist: pytest-pylint>=0.18.0; extra == "develop"
-Requires-Dist: pytest>=7.2.2; extra == "develop"
+Requires-Dist: paramiko
+Requires-Dist: PyAudio
+Provides-Extra: full
+Requires-Dist: pybullet_helpers @ git+https://github.com/Princeton-Robot-Planning-and-Learning/prpl-mono.git#subdirectory=pybullet-helpers ; extra == "full"
+Requires-Dist: pyaudio; extra == "full"
+Requires-Dist: imageio[ffmpeg]; extra == "full"
+Requires-Dist: relational_structs @ git+https://github.com/Princeton-Robot-Planning-and-Learning/prpl-mono.git#subdirectory=relational-structs ; extra == "full"
+Requires-Dist: prpl-utils @ git+https://github.com/Princeton-Robot-Planning-and-Learning/prpl-mono.git#subdirectory=prpl-utils ; extra == "full"
+Requires-Dist: tomsutils @ git+https://github.com/tomsilver/toms-utils.git ; extra == "full"
+Requires-Dist: opencv-python; extra == "full"
+Requires-Dist: scikit-learn; extra == "full"
+Requires-Dist: scikit-image; extra == "full"
+Requires-Dist: yacs; extra == "full"
+Requires-Dist: kornia; extra == "full"
+Requires-Dist: chumpy; extra == "full"
+Requires-Dist: open3d; extra == "full"
+Requires-Dist: face-alignment; extra == "full"
+Requires-Dist: numpy; extra == "full"
+Requires-Dist: defusedxml; extra == "full"
+Requires-Dist: twisted; extra == "full"
+Requires-Dist: pyOpenSSL; extra == "full"
+Requires-Dist: autobahn; extra == "full"
+Requires-Dist: tornado; extra == "full"
+Requires-Dist: bson; extra == "full"
+Requires-Dist: gTTS; extra == "full"
+Requires-Dist: playsound; extra == "full"
+Requires-Dist: black; extra == "full"
+Requires-Dist: docformatter; extra == "full"
+Requires-Dist: isort; extra == "full"
+Requires-Dist: mypy; extra == "full"
+Requires-Dist: pylint>=2.14.5; extra == "full"
+Requires-Dist: pytest-pylint>=0.18.0; extra == "full"
+Requires-Dist: pytest>=7.2.2; extra == "full"
 
 ## Requirements
 

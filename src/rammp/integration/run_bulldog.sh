@@ -23,7 +23,7 @@ roscore_pid=$!  # Store the PID of roscore
 sleep 2
 
 # Run estops_publisher.py in the background
-cd ~/rammp/src/rammp/safety
+cd ~/RAMMP/src/rammp/safety
 python estops_publisher.py --user_id 2 --exp_id 1 &
 estops_pid=$!  # Store the PID of estops_publisher
 
