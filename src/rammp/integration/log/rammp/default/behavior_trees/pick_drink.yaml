@@ -1,0 +1,15 @@
+name: PickDrink
+description: Detect where the mug is and pick it up.
+type: Behavior
+parameters:
+- name: Speed
+  description: Speed of the robot during picking up the mug.
+  is_user_editable: true
+  space:
+    type: Enum
+    elements:
+    - low
+    - medium
+    - high
+  value: medium
+fn: !hla pick_drink

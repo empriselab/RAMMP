@@ -1,0 +1,67 @@
+
+<launch>
+
+    <arg name="base_path" default="/home/isacc/deployment_ws/src/rammp" />
+    <arg name="python_path" default="/home/isacc/miniconda3/envs/feed/bin/python" />
+
+    <param name="robot_description" command="$(find xacro)/xacro --inorder $(find kortex_description)/robots/gen3_robotiq_2f_85.xacro dof:=7 vision:=false tool:=all" />
+
+    <node pkg="robot_state_publisher" type="robot_state_publisher" name="rob_st_pub">
+        <param name="ignore_timestamp" value="true" />
+    </node>
+    
+    <!-- <node pkg="tf2_ros" type="static_transform_publisher" name="camera_link_broadcaster"
+      args="-0.04611404 0.0837761 0.11 0.7071068, 0, 0, 0.7071068 end_effector_link camera_link" /> -->
+
+    <node pkg="tf2_ros" type="static_transform_publisher" name="camera_link_broadcaster"
+      args="0.01 0.0615 0.03 0.5  0.5  0.5 -0.5 end_effector_link camera_link" />
+
+    <node pkg="tf" type="static_transform_publisher" name="static_tf_drinking_tool" args="0 0 0 0 0 0 1 finger_tip drinkbase 10"/>
+
+    <node name="joint_state_publisher" pkg="joint_state_publisher" type="joint_state_publisher">
+        <param name="use_gui" value="false"/>
+        <rosparam param="source_list">["robot_joint_states", "wrist_joint_states"]</rosparam>
+        <param name="rate" value="100"/>
+    </node>
+
+    <node name="st_map2world" pkg="tf" type="static_transform_publisher" respawn="false" output="screen" args="0 0 0 0 0 0 1 map world 10"/>
+
+    <!-- Camera -->
+    <include file="$(find realsense2_camera)/launch/rs_camera.launch">
+        <arg name="align_depth" value="true"/>
+        <arg name="enable_sync" value="true"/>
+        <arg name="enable_gyro" value="true"/>
+        <arg name="enable_accel" value="true"/>
+        <arg name="unite_imu_method" value="linear_interpolation"/>
+        <arg name="filters" value="pointcloud"/>
+    </include>
+
+     <!-- RViz -->
+    <node name="rviz" pkg="rviz" type="rviz" args="-d $(arg base_path)/config/real.rviz" required="true" />
+
+    <!-- Rosbridge server to communicate with web app-->
+    <node pkg="rosbridge_server" type="rosbridge_websocket" name="rosbridge_websocket" output="screen" />
+
+    <!-- Simulated Robot -->
+    <group ns="sim">
+        <param name="robot_description" command="$(find xacro)/xacro --inorder $(find kortex_description)/robots/gen3_robotiq_2f_85.xacro dof:=7 vision:=false tool:=all" />
+
+        <node name="joint_state_publisher" pkg="joint_state_publisher" type="joint_state_publisher">
+            <param name="use_gui" value="false"/>
+            <rosparam param="source_list">
+            - robot_joint_states
+            - wrist_joint_states
+            </rosparam>
+            <param name="rate" value="100"/>
+        </node>
+
+        <node pkg="robot_state_publisher" type="robot_state_publisher" name="rob_st_pub">
+            <param name="ignore_timestamp" value="true" />
+            <param name="tf_prefix" value="sim"/>
+        </node>
+
+        <node name="st_map2world" pkg="tf" type="static_transform_publisher" respawn="false" output="screen" args="0 0 0 0 0 0 1 map sim/world 10"/>
+    
+    </group>
+
+</launch> 

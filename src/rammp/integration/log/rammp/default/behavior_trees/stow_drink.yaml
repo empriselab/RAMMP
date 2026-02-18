@@ -1,0 +1,15 @@
+name: StowDrink
+description: Place the mug on the table.
+type: Behavior
+parameters:
+- name: Speed
+  description: Speed of the robot during placing the mug.
+  is_user_editable: true
+  space:
+    type: Enum
+    elements:
+    - low
+    - medium
+    - high
+  value: medium
+fn: !hla stow_drink

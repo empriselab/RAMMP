@@ -1,0 +1,86 @@
+[build-system]
+requires = ["setuptools", "setuptools-scm"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rammp"
+version = "0.1.0"
+description = "Code for RAMMP."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+   "pybullet_helpers@git+https://github.com/Princeton-Robot-Planning-and-Learning/prpl-mono.git#subdirectory=pybullet-helpers",
+   "pyaudio",
+   "imageio[ffmpeg]",
+   "ruckig",
+   "relational_structs@git+https://github.com/Princeton-Robot-Planning-and-Learning/prpl-mono.git#subdirectory=relational-structs",
+   "prpl-utils@git+https://github.com/Princeton-Robot-Planning-and-Learning/prpl-mono.git#subdirectory=prpl-utils",
+   "tomsutils@git+https://github.com/tomsilver/toms-utils.git",
+   "opencv-python",
+   "multiprocess",
+   "scikit-learn",
+   "scikit-image",
+   "yacs",
+   "kornia",
+   "chumpy",
+   "open3d",
+   "face-alignment",
+   "paramiko",
+   "numpy",
+   "defusedxml",
+   "twisted",
+   "pyOpenSSL",
+   "autobahn",
+   "tornado",
+   "bson",
+   "pyyaml",
+   "gTTS",
+   "playsound",
+   "rospkg",
+   "catkin_pkg",
+   "empy",
+]
+
+[project.optional-dependencies]
+develop = [
+    "black",
+    "docformatter",
+    "isort",
+    "mypy",
+    "pylint>=2.14.5",
+    "pytest-pylint>=0.18.0",
+    "pytest>=7.2.2",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+pybullet_helpers = ["py.typed"]
+
+[tool.black]
+line-length = 88
+target-version = ["py310"]
+
+[tool.isort]
+py_version = 310
+profile = "black"
+multi_line_output = 2
+skip_glob = ["venv/*"]
+split_on_trailing_comma = true
+
+[tool.mypy]
+strict_equality = true
+disallow_untyped_calls = true
+warn_unreachable = true
+exclude = [
+    "venv/*",
+]
+
+[[tool.mypy.overrides]]
+module = [
+    "pybullet.*",
+    "pyaudio.*",
+    "scipy.*",
+]
+ignore_missing_imports = true

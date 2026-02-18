@@ -1,0 +1,63 @@
+# Config file when robot is mounted on vention stand
+
+# Robot constants
+retract_pos: 
+  description: "Rest configuration of the robot"
+  type: "joint_positions"
+  values: [0.0, -0.34903602299465675, -3.141591055693139, -2.0, 0.0, -0.872688061814757, 1.57075917569769]
+home_pos:
+  description: "Home position of the robot"
+  type: "joint_positions"
+  values: [0.0, 0.26191187306569164, -3.1415742777782714, -2.269018308753582, -1.1185276577840852e-05, 0.9598948696060562, 1.5707649014940337,]
+initial_joints: 
+  description: "Initial configuration of the robot"
+  type: "joint_positions"
+  values: [0.0, -0.34903602299465675, -3.141591055693139, -2.5482592711638783, 0.0, -0.872688061814757, 1.57075917569769, 0.8, 0.8, 0.8, 0.8, -0.8, -0.8]
+
+# Feeding task constants
+plate_gaze_pos:
+  description: "Gaze configuration, the plate should be visible from this configuration"
+  type: "joint_positions"
+  values: [-3.03817039055322, -0.9384111490923868, -2.6530027284172397, -0.7351879894695301, 1.0677001631646819, -1.163413640109911, -2.8136810906777536]
+  # values: [-3.029366246305527, -1.015327502431619, -2.6570683101373547, -0.528832419772522, 1.0146981974660338, -1.4378555862358846, -2.5552231710983264]
+  # values: [0.22173928644433688, 0.7992988656022532, 1.1492074067490474, -0.7552192219246701, 0.6357102009025009, -0.7243989912614008, -2.808513759214673]
+before_transfer_pos: 
+  description: "Ready to transfer configuration, the user's face should be visible from this configuration"
+  type: "joint_positions"
+  values: [-2.86554642, -1.61951779, -2.60986085, -1.37302839, 1.11779249, -1.18028264, 2.05515862]
+absolute_before_transfer_pos: 
+  description: "Ready to transfer configuration, the user's face should be visible from this configuration"
+  type: "joint_positions"
+  values: [-2.86554642, -1.61951779, -2.60986085, -1.37302839, 1.11779249, -1.18028264, 2.05515862]
+before_transfer_pose:
+  description: ""
+  type: "ee_pose"
+  values: [0.504, 0.303, 0.529, 0.0, 0.707, 0.707, 0]
+drink_transfer_waypoint_pos:
+  description: "Waypoint from home pos to drink_before_transfer_pos"
+  type: "joint_positions"
+  values: [0.24926565,  0.42492386,  2.95349492, -2.04173775,  1.73755362, 1.62121436,  0.891071]
+drink_before_transfer_pos: 
+  description: "Ready to transfer configuration, the user's face should be visible from this configuration"
+  type: "joint_positions"
+  # values: [-0.18247394,  1.51160651,  1.2398947 , -1.35675594, -3.13563543, 1.60767818, -0.32014765]
+  values: [-0.24420921,  1.3168486 ,  1.15006708, -1.16072917,  3.01759747, 1.66680848, -0.46781887]
+drink_before_transfer_pose:
+  description: ""
+  type: "ee_pose"
+  # values: [0.13979936,  0.35942528,  0.42042437, -0.50437602,  0.49844251, 0.50056543, -0.49658246]
+  values: [0.14008828,  0.36175472,  0.54307616, -0.50444171,  0.49828791, 0.5006045 , -0.4966315]
+
+# Drink placement constants
+drink_gaze_pos: 
+  description: ""
+  type: "joint_positions"
+  # values: [-0.00445280534261272, 0.8412260759078066, -3.126206506707969, -2.354753187410394, 0.005642485174632118, 1.6401406473647613, 1.6816805008897628]
+  # values: [0.25299803987060104, 0.7068668025941645, -3.039494780563316, -2.307245323040579, 0.3375881254433288, 1.4255256830210363, 1.5864775519255012]
+  values: [-0.01057914,  0.78125648,  3.13943256, -2.46485519, -0.01346548, 1.65036319,  1.57161152]
+drink_staging_pos: 
+  description: ""
+  type: "joint_positions"
+  # values: [-2.5860902733967808, -1.105096803823792, -1.0315333702969696, -1.3979449215077393, -0.7852325147776451, -0.8370922506847585, -2.7182634909296315]
+  # values: [-2.396196235029771, -1.1604665860476295, -1.0025523186825094, -1.2233400909588745, -0.6239823718310911, -1.3578355849622739, -2.797864044331555]
+  values: [-0.01057914,  0.78125648,  3.13943256, -2.46485519, -0.01346548, 1.65036319,  1.57161152]
