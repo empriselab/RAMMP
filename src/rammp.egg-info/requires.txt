@@ -1,0 +1,39 @@
+pybullet_helpers @ git+https://github.com/Princeton-Robot-Planning-and-Learning/prpl-mono.git#subdirectory=pybullet-helpers
+pyaudio
+imageio[ffmpeg]
+ruckig
+relational_structs @ git+https://github.com/Princeton-Robot-Planning-and-Learning/prpl-mono.git#subdirectory=relational-structs
+prpl-utils @ git+https://github.com/Princeton-Robot-Planning-and-Learning/prpl-mono.git#subdirectory=prpl-utils
+tomsutils @ git+https://github.com/tomsilver/toms-utils.git
+opencv-python
+multiprocess
+scikit-learn
+scikit-image
+yacs
+kornia
+chumpy
+open3d
+face-alignment
+paramiko
+numpy
+defusedxml
+twisted
+pyOpenSSL
+autobahn
+tornado
+bson
+pyyaml
+gTTS
+playsound
+rospkg
+catkin_pkg
+empy
+
+[develop]
+black
+docformatter
+isort
+mypy
+pylint>=2.14.5
+pytest-pylint>=0.18.0
+pytest>=7.2.2
