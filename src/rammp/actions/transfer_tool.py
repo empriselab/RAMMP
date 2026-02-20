@@ -34,6 +34,7 @@ from rammp.actions.base import (
 )
 
 from rammp.actions.feel_the_bite.outside_mouth_transfer import OutsideMouthTransfer
+from rammp.perception.gestures_perception.static_gesture_detectors import mouth_open, head_nod
 
 class TransferToolHLA(HighLevelAction):
     """Transfer drink."""
@@ -52,47 +53,29 @@ class TransferToolHLA(HighLevelAction):
 
     def detect_initiate_transfer(self, initiate_transfer_interaction: str, ready_to_initiate_mode: str):
         if initiate_transfer_interaction == "button":
-            if self.web_interface is not None:
-                self.web_interface.fix_explanation("Please press the button to initiate transfer")
             self.perception_interface.detect_button_press()
         elif initiate_transfer_interaction == "open_mouth":
-            if self.web_interface is not None:
-                self.web_interface.fix_explanation("Please open your mouth to initiate transfer")
             print("Starting mouth open detection")
             mouth_open(self.perception_interface, termination_event=None, timeout=600) # 10 minutes
             print("Detected mouth open")
         elif initiate_transfer_interaction == "auto_timeout":
-            if self.web_interface is not None:
-                self.web_interface.fix_explanation("Please wait for the transfer to initiate in 5 seconds")
             time.sleep(5.0)
         else:
             raise NotImplementedError
         print("Initiating transfer")
 
-        if self.web_interface is not None:
-            self.web_interface.clear_explanation()
-
     def detect_transfer_complete(self, transfer_complete_interaction: str, ready_for_transfer_interaction: str):
         if transfer_complete_interaction == "button":
-            if self.web_interface is not None:
-                self.web_interface.fix_explanation("Please press the button to complete transfer")
             self.perception_interface.detect_button_press()
         elif transfer_complete_interaction == "sense":
-            if self.web_interface is not None:
-                self.web_interface.fix_explanation("Please do a head nod to complete transfer")
             print("Starting head nod detection")
             head_nod(self.perception_interface, termination_event=None, timeout=600) # 10 minutes
             print("Head nod detected")
         elif transfer_complete_interaction == "auto_timeout":
-            if self.web_interface is not None:
-                self.web_interface.fix_explanation("Please wait for the transfer to complete in 5 seconds")
             time.sleep(5.0)
         else:
             raise NotImplementedError
         print("Detected transfer completion")
-
-        if self.web_interface is not None:
-            self.web_interface.clear_explanation()
 
     def relay_ready_to_initiate_transfer(self, ready_to_initiate_transfer_interaction: str, initiate_transfer_interaction: str):
         if ready_to_initiate_transfer_interaction == "silent":
@@ -141,7 +124,6 @@ class TransferToolHLA(HighLevelAction):
         if self.robot_interface is not None:
             time.sleep(2.0) # let head perception thread warmstart / robot to stabilize
             self.robot_interface.set_tool(self.tool)
-            self.perception_interface.zero_ft_sensor()
         else:
             time.sleep(1.0) # let sim head perception thread warmstart
 

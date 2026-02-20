@@ -1,7 +1,7 @@
 
 <launch>
 
-    <arg name="base_path" default="$(env HOME)/rammp_ws/src/rammp" />
+    <arg name="base_path" default="$(env HOME)/rammp_ws/src/RAMMP" />
     <arg name="python_path" default="$(env HOME)/miniconda3/envs/feed/bin/python" />
 
     <param name="robot_description" command="$(find xacro)/xacro --inorder $(find kortex_description)/robots/gen3_robotiq_2f_85.xacro dof:=7 vision:=false tool:=all" />

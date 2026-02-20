@@ -71,7 +71,7 @@ parameters:
     - button
     - sense
     - auto_timeout
-  value: sense
+  value: button
 - name: OutsideMouthDistance
   description: Distance from the straw tip to the user's mouth for the drink transfer.
   is_user_editable: true
