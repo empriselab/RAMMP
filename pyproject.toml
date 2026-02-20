@@ -9,7 +9,6 @@ description = "Code for RAMMP."
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
-    "protobuf==3.19.0",
     "multiprocess",
     "pyyaml",
     "rospkg",
@@ -32,7 +31,6 @@ full = [
     "scikit-image",
     "yacs",
     "kornia",
-    "chumpy",
     "open3d",
     "face-alignment",
     "numpy",
@@ -45,6 +43,14 @@ full = [
     "gTTS",
     "playsound",
     "black",
+]
+
+controller = [
+    "protobuf==3.19.0",
+]
+
+dev = [
+    "black",
     "docformatter",
     "isort",
     "mypy",
@@ -52,6 +58,8 @@ full = [
     "pytest-pylint>=0.18.0",
     "pytest>=7.2.2",
 ]
+
+all = ["rammp[full,dev]"]
 
 [tool.setuptools.packages.find]
 where = ["src"]

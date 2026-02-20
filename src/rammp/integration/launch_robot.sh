@@ -1,5 +1,12 @@
 #!/bin/bash
 
+USER_HOME="$HOME"
+BASE_DIR="$USER_HOME/rammp_ws/src/RAMMP/src/rammp"
+
+CONTROL_DIR="$BASE_DIR/control/robot_controller"
+MISC_DIR="$BASE_DIR/misc"
+SAFETY_DIR="$BASE_DIR/safety"
+
 # Function to clean up background processes
 cleanup() {
     echo "Stopping background processes..."
@@ -24,21 +31,21 @@ cleanup() {
 trap cleanup SIGINT
 
 # Start joint states publisher
-cd /home/isacc/rammp_ws/src/rammp/src/rammp/control/robot_controller
+cd "$CONTROL_DIR"
 python joint_states_publisher.py &
 joint_states_publisher_pid=$!  # Store the PID of joint_states_publisher
 
 # Start speaker
-cd /home/isacc/rammp_ws/src/rammp/src/rammp/misc
+cd "$MISC_DIR"
 python speak.py &
 speaker_pid=$!  # Store the PID of speaker
 
 # move to safety directory
-cd /home/isacc/rammp_ws/src/rammp/src/rammp/safety
+cd "$SAFETY_DIR"
 
 # Start transfer button
-python transfer_button_listener.py --button_id -1 &
-transfer_button_pid=$!  # Store the PID of transfer_button_listener
+# python transfer_button_listener.py --button_id -1 &
+# transfer_button_pid=$!  # Store the PID of transfer_button_listener
 
 # Start collision sensor
 python collision_sensor.py &
@@ -54,4 +61,4 @@ cleanup  # Ensure cleanup is called when bulldog finishes
 wait $joint_states_publisher_pid
 wait $speaker_pid
 wait $collision_sensor_pid
-wait $transfer_button_pid
+# wait $transfer_button_pid

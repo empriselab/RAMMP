@@ -57,7 +57,7 @@ class BullDog:
         # isacc for compute and nuc for robot control, 
         # and we need to transmit logs from nuc (where bulldog runs) to isacc
         self.remote_execution_log_path = "/home/isacc/deployment_ws/src/rammp/src/rammp/integration/log/nuc_execution_log.txt"
-        hostname = "192.168.1.2"
+        hostname = "192.168.1.12"
         username = "isacc"
 
         # Get the password from the environment variable

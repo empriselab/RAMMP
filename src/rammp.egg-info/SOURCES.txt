@@ -200,6 +200,8 @@ src/rammp/safety/estops_publisher.py
 src/rammp/safety/transfer_button_listener.py
 src/rammp/safety/utils.py
 src/rammp/safety/watchdog.py
+src/rammp/safety/__pycache__/button.cpython-310.pyc
+src/rammp/safety/__pycache__/utils.cpython-310.pyc
 src/rammp/simulation/control.py
 src/rammp/simulation/planning.py
 src/rammp/simulation/scene_description.py

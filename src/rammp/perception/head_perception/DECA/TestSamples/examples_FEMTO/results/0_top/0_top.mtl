@@ -1,0 +1,3 @@
+newmtl FaceTexture
+map_Kd 0_top.png
+disp TestSamples/examples/results/0_top/0_top_normals.png
