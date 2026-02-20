@@ -86,7 +86,8 @@ In a **single-machine setup**, both environments can exist on the same machine.
 9. Add the following to your `~/.bashrc`:
 
    ```bash
-   export LD_PRELOAD=/lib/x86_64-linux-gnu/libffi.so.7
+   export LD_LIBRARY_PATH=/lib/x86_64-linux-gnu:/usr/lib/x86_64-linux-gnu:/lib:/usr/local/cuda-12.1/lib64:/opt/ros/noetic/lib:/opt/ros/noetic/lib/x86_64-linux-gnu
+   export LD_PRELOAD="/lib/x86_64-linux-gnu/libffi.so.7 /lib/x86_64-linux-gnu/libtiff.so.5"
    ```
 
    Then reload:
