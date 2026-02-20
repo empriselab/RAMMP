@@ -2,3 +2,7 @@
 {"state": "task_selection", "status": "take_sip"}
 {"state": "task_selection", "status": "take_sip"}
 {"state": "post_drink_pickup", "status": "drink_transfer"}
+{"state": "task_selection", "status": "take_sip"}
+{"state": "post_drink_pickup", "status": "drink_transfer"}
+{"state": "task_selection", "status": "finish_feeding"}
+{"state": "task_selection", "status": "jump"}

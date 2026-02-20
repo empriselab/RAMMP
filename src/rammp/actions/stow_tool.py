@@ -56,12 +56,7 @@ class StowToolHLA(HighLevelAction):
             self.robot_interface.stop_maintain_home_orientation()
         
         last_drink_poses, last_drink_pickup_joint_pos = self.perception_interface.get_last_drink_pickup_configs()
-        x_movement, y_movement = self.sim.scene_description.drink_delta_xy
-        self.sim.scene_description.drink_delta_xy = (0, 0)
-
-        for value in ['drink_pose', 'inside_top_pose', 'place_inside_bottom_pose', 'place_pre_grasp_pose']:
-            last_drink_poses[value].position[0] += y_movement
-            last_drink_poses[value].position[1] -= x_movement
+        x_movement, y_movement = 0, 0
 
         # self.move_to_joint_positions(self.sim.scene_description.drink_before_transfer_pos)
         if abs(x_movement) < 0.01 and abs(y_movement) < 0.01:

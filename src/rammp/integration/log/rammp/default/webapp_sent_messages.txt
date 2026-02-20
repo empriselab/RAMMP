@@ -3,3 +3,7 @@
 {"state": "task_selection", "status": "jump"}
 {"state": "task_selection", "status": "jump"}
 {"state": "transferdrinks", "status": "jump"}
+{"state": "task_selection", "status": "jump"}
+{"state": "transferdrinks", "status": "jump"}
+{"state": "afterdrinktransfer", "status": "jump"}
+{"state": "auto_time", "status": "10.0"}

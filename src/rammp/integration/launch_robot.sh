@@ -40,12 +40,12 @@ cd "$MISC_DIR"
 python speak.py &
 speaker_pid=$!  # Store the PID of speaker
 
-# move to safety directory
-cd "$SAFETY_DIR"
-
 # Start transfer button
+# cd "$MISC_DIR"
 # python transfer_button_listener.py --button_id -1 &
 # transfer_button_pid=$!  # Store the PID of transfer_button_listener
+
+cd "$SAFETY_DIR"
 
 # Start collision sensor
 python collision_sensor.py &
