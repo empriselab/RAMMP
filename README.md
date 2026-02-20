@@ -2,42 +2,143 @@
 
 RAMMP can be deployed in one of the following configurations:
 
-- Two-machine setup
-  - GPU Machine (GM): Runs compute-intensive components
-  - Controller Machine (CM): Handles controllers and emergency stops
-- Single-machine setup (SM): Runs all components on a single system
+- **Two-machine setup**
+  - **GPU Machine (GM):** Runs compute-intensive components.
+  - **Controller Machine (CM):** Handles controllers and emergency stops.
+- **Single-machine setup (SM):** Runs all components on a single system.
+
+---
 
 ## Requirements
 
-- Operating System: Ubuntu 20.04
-- Python: 3.10 or later
-- ROS Noetic (including rospy)
+- **Operating System:** Ubuntu 20.04  
+- **Python:** 3.10 or later  
+- **ROS:** Noetic (including `rospy`)  
+
+---
 
 ## Installation
 
-### GPU Machine (GM) or Single Machine (SM)
+The system uses two Conda environments:
 
-1. Create a Conda environment: `conda create -n rammp python=3.10`
-2. Activate the environment: `conda activate rammp`
-3. (SM only) Install the Kortex API (after downloading the wheel file): `python -m pip install kortex_api-2.6.0.post3-py3-none-any.whl`
-4. Install PyTorch (CUDA 12.1): `conda install pytorch==2.1.0 torchvision==0.16.0 torchaudio==2.1.0 pytorch-cuda=12.1 -c pytorch -c nvidia`
-5. Install PyTorch3D: `python -m pip install pytorch3d -f https://dl.fbaipublicfiles.com/pytorch3d/packaging/wheels/py310_cu121_pyt210/download.html`
-6. Clone the RAMMP repository: `git clone https://github.com/empriselab/RAMMP`
-7. Navigate into the repository: `cd RAMMP`
-8. Install RAMMP (full installation): `pip install -e ".[full]"`
-9. Install Pinocchio: `conda install -c conda-forge "pinocchio=3.1.*"`
-10. Add the following to your ~/.bashrc and source: `export LD_PRELOAD=/lib/x86_64-linux-gnu/libffi.so.7`
+- `compute` – for compute-intensive components  
+- `controller` – for control and hardware interfaces  
 
-### Controller Machine (CM)
+In a **two-machine setup**, these environments typically live on separate machines (GM and CM).  
+In a **single-machine setup**, both environments can exist on the same machine.
 
-1. Create a Conda environment: `conda create -n rammp python=3.10`
-2. Activate the environment: `conda activate rammp`
-3. Install the Kortex API (after downloading the wheel file): `python -m pip install kortex_api-2.6.0.post3-py3-none-any.whl`
-4. Clone the RAMMP repository: `git clone https://github.com/empriselab/RAMMP`
-5. Navigate into the repository: `cd RAMMP`
-6. Install RAMMP: `pip install -e .`
-7. Install Pinocchio: `conda install -c conda-forge "pinocchio=3.1.*"`
+---
+
+## Compute Setup
+
+1. Create the Conda environment:
+
+   ```bash
+   conda create -n compute python=3.10
+   ```
+
+2. Activate the environment:
+
+   ```bash
+   conda activate compute
+   ```
+
+3. Install PyTorch (CUDA 12.1):
+
+   ```bash
+   conda install pytorch==2.1.0 torchvision==0.16.0 torchaudio==2.1.0 \
+       pytorch-cuda=12.1 numpy=1.26.4 numpy-base=1.26.4 \
+       -c pytorch -c nvidia -c defaults
+   ```
+
+4. Install PyTorch3D:
+
+   ```bash
+   python -m pip install pytorch3d \
+       -f https://dl.fbaipublicfiles.com/pytorch3d/packaging/wheels/py310_cu121_pyt210/download.html
+   ```
+
+5. Clone the RAMMP repository:
+
+   ```bash
+   git clone https://github.com/empriselab/RAMMP
+   cd RAMMP
+   ```
+
+6. Install additional dependencies:
+
+   ```bash
+   pip install --no-build-isolation chumpy
+   ```
+
+7. Install RAMMP (full installation):
+
+   ```bash
+   pip install -e ".[full]"
+   ```
+
+8. Install Pinocchio:
+
+   ```bash
+   conda install -c conda-forge "pinocchio=3.1.*"
+   ```
+
+9. Add the following to your `~/.bashrc`:
+
+   ```bash
+   export LD_LIBRARY_PATH=/lib/x86_64-linux-gnu:/usr/lib/x86_64-linux-gnu:/lib:/usr/local/cuda-12.1/lib64:/opt/ros/noetic/lib:/opt/ros/noetic/lib/x86_64-linux-gnu
+   export LD_PRELOAD="/lib/x86_64-linux-gnu/libffi.so.7 /lib/x86_64-linux-gnu/libtiff.so.5"
+   ```
+
+   Then reload:
+
+   ```bash
+   source ~/.bashrc
+   ```
+
+---
+
+## Controller Setup
+
+1. Create the Conda environment:
+
+   ```bash
+   conda create -n controller python=3.10
+   ```
+
+2. Activate the environment:
+
+   ```bash
+   conda activate controller
+   ```
+
+3. Install the Kortex API (after downloading the wheel file):
+
+   ```bash
+   python -m pip install kortex_api-2.6.0.post3-py3-none-any.whl
+   ```
+
+4. Clone the RAMMP repository:
+
+   ```bash
+   git clone https://github.com/empriselab/RAMMP
+   cd RAMMP
+   ```
+
+5. Install RAMMP (controller-only installation):
+
+   ```bash
+   pip install -e ".[controller]"
+   ```
+
+6. Install Pinocchio:
+
+   ```bash
+   conda install -c conda-forge "pinocchio=3.1.*"
+   ```
+
+---
 
 ## Running
 
-WIP
+_Work in progress._
