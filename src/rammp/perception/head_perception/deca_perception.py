@@ -163,7 +163,7 @@ class HeadPerception:
          - noisy_reading,
         '''
 
-        image = cv2.flip(image, -1)
+        # image = cv2.flip(image, -1)
 
         viz_image = None
 
@@ -753,8 +753,8 @@ class HeadPerception:
         '''
 
         # # get image_x and image_y in the non-inverted form
-        image_y = image.shape[0] - image_y
-        image_x = image.shape[1] - image_x
+        # image_y = image.shape[0] - image_y
+        # image_x = image.shape[1] - image_x
 
         # print("(image_y,image_x): ",image_y,image_x)
         # print("depth image: ", depth_image.shape[0], depth_image.shape[1])
@@ -813,8 +813,8 @@ class HeadPerception:
         image_y = world_y * (fy / world_z) + cy
 
         # flip back image_x and image_y for inverted form
-        image_x = image_width - image_x
-        image_y = image_height - image_y
+        # image_x = image_width - image_x
+        # image_y = image_height - image_y
 
         return image_x, image_y
 

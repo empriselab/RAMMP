@@ -211,7 +211,7 @@ class HeadPerceptionROSWrapper:
             if self.filter_noisy_readings:
                 print("None returned from DECA")
                 self.noisy_reading_publisher.publish(Bool(data=True))
-            
+            print("No head perception data")
             return None
 
     def updateTF(self, source_frame, target_frame, pose):
@@ -363,13 +363,15 @@ if __name__ == "__main__":
 
     rospy.init_node("head_perception", anonymous=True)
 
-    head_perception = HeadPerception(record_goal_pose=args.record_goal_pose)
-    head_perception_ros_wrapper = HeadPerceptionROSWrapper(head_perception)
+    print("Args.record_goal_pose: ", args.record_goal_pose)
+
+    head_perception_ros_wrapper = HeadPerceptionROSWrapper(record_goal_pose=args.record_goal_pose)
     time.sleep(2.0)  # let the buffers fill up
 
     if args.set_tool_tip_transform:
         head_perception_ros_wrapper.save_tool_tip_transform(args.tool)
     head_perception_ros_wrapper.set_tool(args.tool)
     while not rospy.is_shutdown():
+        print("Running head perception")
         head_perception_ros_wrapper.run_head_perception(visualize=args.visualize)
         # rospy.sleep(0.1)
