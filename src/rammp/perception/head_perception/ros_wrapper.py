@@ -240,6 +240,8 @@ class HeadPerceptionROSWrapper:
 
         # pose = self.base_to_camera @ pose
 
+        return
+
         markerArray = MarkerArray()
 
         tool_marker = Marker()
@@ -254,7 +256,7 @@ class HeadPerceptionROSWrapper:
         tool_marker.id = 1
         tool_marker.type = tool_marker.MESH_RESOURCE  # CUBE LIST
         if self.head_perception.tool == "drink":
-            tool_marker.mesh_resource = "file:////home/isacc/deployment_ws/src/kortex_description/tools/drinking_tool/tool_tip.stl"
+            tool_marker.mesh_resource = "file:////home/isacc/rammp_ws/src/kortex_description/tools/drinking_tool/tool_tip.stl"
         else:
             raise ValueError(f"Mesh does not exist for tool: {self.head_perception}")
         

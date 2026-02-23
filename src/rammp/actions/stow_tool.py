@@ -40,7 +40,9 @@ class StowToolHLA(HighLevelAction):
         objects: tuple[Object, ...],
         params: dict[str, Any],
     ) -> str:
-        del params  # not used right now
+        # del params  # not used right now
+        # assert "drink_location" in params
+        self.drink_location = params.get("drink_location", "table") # "wheelchair_handle" or "table"
         assert len(objects) == 1
         tool = objects[0]
         assert tool.name in ["drink"]
@@ -54,7 +56,36 @@ class StowToolHLA(HighLevelAction):
 
         if self.robot_interface is not None:
             self.robot_interface.stop_maintain_home_orientation()
+
+        if self.drink_location == "table":
+            self.stow_drink_on_table()
+        elif self.drink_location == "wheelchair_handle":
+            self.stow_drink_in_wheelchair()
+        elif self.drink_location == "handover":
+            self.handover_drink()
+        else:
+            raise ValueError(f"Invalid drink location: {self.drink_location}")
+
+    def handover_drink(self) -> None:
         
+        self.move_to_joint_positions(self.sim.scene_description.home_pos)
+        self.move_to_ee_pose(self.sim.scene_description.drink_handover_pose)
+        # input("Press Enter to ungrasp drink")
+        time.sleep(5.0) # Wait for 5 seconds to simulate waiting for the human to take the drink
+        self.ungrasp_tool("drink")
+        self.move_to_joint_positions(self.sim.scene_description.home_pos)
+
+    def stow_drink_in_wheelchair(self) -> None:
+        self.move_to_joint_positions(self.sim.scene_description.home_pos)
+        self.move_to_joint_positions(self.sim.scene_description.above_drink_handle_pos)
+        self.move_to_ee_pose(self.sim.scene_description.inside_drink_handle_pose)
+        self.ungrasp_tool("drink")
+        self.move_to_ee_pose(self.sim.scene_description.below_drink_handle_pose)
+        self.move_to_ee_pose(self.sim.scene_description.outside_drink_handle_pose)
+        self.move_to_joint_positions(self.sim.scene_description.home_pos)
+
+    def stow_drink_on_table(self) -> None:
+
         last_drink_poses, last_drink_pickup_joint_pos = self.perception_interface.get_last_drink_pickup_configs()
         x_movement, y_movement = 0, 0
 

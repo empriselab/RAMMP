@@ -40,11 +40,22 @@ class PickToolHLA(HighLevelAction):
         objects: tuple[Object, ...],
         params: dict[str, Any],
     ) -> str:
-        del params  # not used right now
+        # del params  # not used right now
+        # assert "drink_location" in params
+        self.drink_location = params.get("drink_location", "table") # "wheelchair_handle" or "table"
         assert len(objects) == 1
         tool = objects[0]
         assert tool.name in ["drink"]
         return f"pick_{tool.name}.yaml"
+
+# inside_drink_handle_pos: JointPositions
+# inside_drink_handle_pose: Pose
+# above_drink_handle_pos: JointPositions
+# above_drink_handle_pose: Pose
+# below_drink_handle_pos: JointPositions
+# below_drink_handle_pose: Pose   
+# outside_drink_handle_pos: JointPositions
+# outside_drink_handle_pose: Pose
         
     def pick_drink(self, speed: str) -> None:
         assert self.sim.held_object_name is None
@@ -52,6 +63,14 @@ class PickToolHLA(HighLevelAction):
         if self.robot_interface is not None:
             self.robot_interface.set_speed(speed)
 
+        if self.drink_location == "table":
+            self.pick_drink_from_table()
+        elif self.drink_location == "wheelchair_handle":
+            self.pick_drink_from_wheelchair()
+        else:
+            raise ValueError(f"Invalid drink location: {self.drink_location}")
+
+    def pick_drink_from_table(self) -> None:
         self.move_to_joint_positions(self.sim.scene_description.retract_pos)
         self.close_gripper()
         self.move_to_joint_positions(self.sim.scene_description.drink_gaze_pos)
@@ -72,3 +91,16 @@ class PickToolHLA(HighLevelAction):
         if self.robot_interface is not None:
             self.robot_interface.start_maintain_home_orientation()
         # self.move_to_joint_positions(self.sim.scene_description.drink_before_transfer_pos)
+        
+    def pick_drink_from_wheelchair(self) -> None:
+        
+        self.move_to_joint_positions(self.sim.scene_description.home_pos)
+        self.move_to_joint_positions(self.sim.scene_description.outside_drink_handle_pos)
+        self.close_gripper()
+        self.move_to_ee_pose(self.sim.scene_description.below_drink_handle_pose)
+        self.move_to_ee_pose(self.sim.scene_description.inside_drink_handle_pose)
+        self.grasp_tool("drink")
+        self.move_to_ee_pose(self.sim.scene_description.above_drink_handle_pose)
+        self.move_to_joint_positions(self.sim.scene_description.home_pos)
+
+

@@ -81,6 +81,20 @@ class SceneDescription:
     drink_gaze_pos: JointPositions
     drink_staging_pos: JointPositions
 
+    # Drink handle on wheelchair
+    inside_drink_handle_pos: JointPositions
+    inside_drink_handle_pose: Pose
+    above_drink_handle_pos: JointPositions
+    above_drink_handle_pose: Pose
+    below_drink_handle_pos: JointPositions
+    below_drink_handle_pose: Pose   
+    outside_drink_handle_pos: JointPositions
+    outside_drink_handle_pose: Pose
+
+    # Drink handover
+    drink_handover_pos: JointPositions
+    drink_handover_pose: Pose
+    
     # Robot.
     robot_name: str = "kinova-gen3"
     robot_urdf_path: Path = (Path(__file__).parent.parent / "assets" / "robot" / "robot.urdf")

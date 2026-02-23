@@ -100,9 +100,18 @@ if __name__ == "__main__":
     if run_commands != "y":
         exit()
 
-    arm_client_interface.start_maintain_home_orientation()
-    input("Press enter to stop maintaining home orientation...")
-    arm_client_interface.stop_maintain_home_orientation()
+    # inside_handle_pose = [-0.31010666489601135, -0.018085628747940063, 0.1462610810995102, 0.02322167404813943, 0.7180926934794382, 0.6955542280407613, 0.0028201561070785135]
+    # arm_client_interface.execute_command(CartesianCommand(pos=inside_handle_pose[:3], quat=inside_handle_pose[3:]))
+
+    above_inside_handle_pose = [-0.31010666489601135, -0.018085628747940063, 0.1062610810995102, 0.02322167404813943, 0.7180926934794382, 0.6955542280407613, 0.0028201561070785135]
+    arm_client_interface.execute_command(CartesianCommand(pos=above_inside_handle_pose[:3], quat=above_inside_handle_pose[3:]))
+
+    outside_handle_pose = [-0.31010666489601135, -0.118085628747940063, 0.1062610810995102, 0.02322167404813943, 0.7180926934794382, 0.6955542280407613, 0.0028201561070785135]
+    arm_client_interface.execute_command(CartesianCommand(pos=outside_handle_pose[:3], quat=outside_handle_pose[3:]))
+
+    # arm_client_interface.start_maintain_home_orientation()
+    # input("Press enter to stop maintaining home orientation...")
+    # arm_client_interface.stop_maintain_home_orientation()
 
     # retract_pos = [0.0, -0.34903602299465675, -3.141591055693139, -2.0, 0.0, -0.872688061814757, 1.57075917569769]
     # arm_client_interface.execute_command(JointCommand(retract_pos))
