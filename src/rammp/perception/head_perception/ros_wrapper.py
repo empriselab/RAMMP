@@ -211,7 +211,7 @@ class HeadPerceptionROSWrapper:
             if self.filter_noisy_readings:
                 print("None returned from DECA")
                 self.noisy_reading_publisher.publish(Bool(data=True))
-            print("No head perception data")
+            # print("No head perception data")
             return None
 
     def updateTF(self, source_frame, target_frame, pose):

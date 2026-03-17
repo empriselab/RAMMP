@@ -88,8 +88,8 @@ class PerceptionInterface:
         if self.simulation:
             return True
 
-        input("Press Enter to simulate button press")
-        return True
+        # input("Press Enter to simulate button press")
+        # return True
         
         self.transfer_button = False
         # wait for button press
