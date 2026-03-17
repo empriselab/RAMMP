@@ -141,4 +141,36 @@ In a **single-machine setup**, both environments can exist on the same machine.
 
 ## Running
 
-_Work in progress._
+### Drinking Demo
+1. Run the arm controller server on the NUC:
+   - ssh to the NUC: `ssh emprise@192.168.1.3` with lab password
+   - run the controller server:
+       - `conda activate controller`
+       - `cd /home/emprise/RAMMP/src/rammp/control/robot_controller`
+       - `python arm_server.py`
+2. Run bulldog on the NUC:
+   - ssh to the NUC: `ssh emprise@192.168.1.3` with lab password
+   - run bulldog:
+       - `conda activate controller`
+       - `cd /home/emprise/RAMMP/src/rammp/integration`
+       - `./run_bulldog.sh`
+2. Run a roscore on the compute system: `roscore`
+3. Launch the roslaunch on compute system for camera / visualization / publish tfs:
+    - `conda activate compute`
+    - `cd /home/rammp/rammp_ws/src/RAMMP/launch`
+    - `roslaunch robot.launch`
+4. Run the watchdog / transfer button listener / other safety stuff:
+    - `conda activate compute`
+    - `cd /home/rammp/rammp_ws/src/RAMMP/src/rammp/integration`
+    - `./launch_robot.sh`
+5. Run the drinking demo:
+    - `conda activate compute`
+    - `source ~/rammp_ws/devel/setup.bash`
+    - `cd /home/rammp/rammp_ws/src/RAMMP/src/rammp/integration`
+    - `python run.py --user rammp --run_on_robot`
+   
+### Moving the robot to preset configurations
+
+You can move the robot to preset configurations by running:
+- `cd /home/rammp/rammp_ws/src/RAMMP/src/rammp/control/robot_controller/preset_actions`
+- `python retract.py`
