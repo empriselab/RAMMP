@@ -3,20 +3,22 @@ import time
 import argparse
 import pyaudio
 
-import rospy
+import rclpy
+from rclpy.node import Node
 from std_msgs.msg import Bool
 
-from rammp.safety.button import Button 
+from rammp.safety.button import Button
 BUTTON_CHECK_FREQUENCY = 100
 
-class TransferButtonListener:
+class TransferButtonListener(Node):
     def __init__(self, button_id: int):
+        super().__init__('transfer_button_listener')
 
         self.button = Button(button_id)
-        self.button_pub = rospy.Publisher("/transfer_button", Bool, queue_size=1)
+        self.button_pub = self.create_publisher(Bool, "/transfer_button", 1)
 
     def run(self):
-        while not rospy.is_shutdown():
+        while rclpy.ok():
             start_time = time.time()
             button_pressed = self.button.check()
 
@@ -24,7 +26,7 @@ class TransferButtonListener:
                 print("Transfer button pressed")
                 self.button_pub.publish(Bool(data=button_pressed))
                 self.button.reset()
-                
+
             time.sleep(max(0, 1.0/BUTTON_CHECK_FREQUENCY - (time.time() - start_time)))
 
 if __name__ == "__main__":
@@ -43,7 +45,9 @@ if __name__ == "__main__":
                 device_indices.append(i)
                 print(f"Device {i}: {device_info['name']}")
         raise ValueError("Please provide the input device index")
-    
-    rospy.init_node("transfer_button_listener")
-    estop_publisher = TransferButtonListener(button_id=args.button_id)
-    estop_publisher.run()
+
+    rclpy.init()
+    listener = TransferButtonListener(button_id=args.button_id)
+    listener.run()
+    listener.destroy_node()
+    rclpy.shutdown()

@@ -172,7 +172,13 @@ class TransferToolHLA(HighLevelAction):
 
         if self.robot_interface is not None:
             self.robot_interface.set_speed(speed)
-        
+
+        # If the SystemControl node is available, delegate to it for state
+        # tracking and arm preset movements; interaction logic still handled here.
+        if self.system_control_client is not None:
+            self.system_control_client.transfer_drink()
+            return
+
         # Assume the second last item in args is the ask_confirmation
         ask_confirmation = args[-2]
 

@@ -11,7 +11,10 @@ from sklearn.cluster import DBSCAN   # <-- ADDED
 import open3d as o3d
 
 # ros imports
-import rospy
+import rclpy
+from rclpy.node import Node
+from rclpy.time import Time
+from rclpy.duration import Duration
 import message_filters
 from sensor_msgs.msg import Image, CameraInfo
 from cv_bridge import CvBridge, CvBridgeError
@@ -28,17 +31,18 @@ from geometry_msgs.msg import Pose as pose_msg
 
 
 class TFInterface:
-    def __init__(self):
+    def __init__(self, node: "Node"):
+        self.node = node
         self.tfBuffer = tf2_ros.Buffer()  # Using default cache time of 10 secs
-        self.listener = tf2_ros.TransformListener(self.tfBuffer)
-        self.broadcaster = tf2_ros.TransformBroadcaster()
+        self.listener = tf2_ros.TransformListener(self.tfBuffer, self.node)
+        self.broadcaster = tf2_ros.TransformBroadcaster(self.node)
         time.sleep(1.0)
 
     def updateTF(self, source_frame, target_frame, pose):
 
         t = TransformStamped()
 
-        t.header.stamp = rospy.Time.now()
+        t.header.stamp = self.node.get_clock().now().to_msg()
         t.header.frame_id = source_frame
         t.child_frame_id = target_frame
 
@@ -60,7 +64,7 @@ class TFInterface:
             transform = self.tfBuffer.lookup_transform(
                 frame_A,
                 target_frame,
-                rospy.Time(secs=stamp.secs, nsecs=stamp.nsecs),
+                Time(seconds=stamp.sec, nanoseconds=stamp.nanosec),
             )
             return transform
         except (
@@ -68,7 +72,6 @@ class TFInterface:
             tf2_ros.ConnectivityException,
             tf2_ros.ExtrapolationException,
         ):
-            # print("Exexption finding transform between base_link and", target_frame)
             return None
 
     def make_homogeneous_transform(self, transform):
@@ -100,7 +103,7 @@ class TFInterface:
         pose_matrix[:3, :3] = Rotation.from_quat(orientation).as_matrix()
         pose_matrix[3, 3] = 1
         return pose_matrix
-    
+
     def matrix_to_pose(self, mat):
         position = mat[:3, 3]
         orientation = Rotation.from_matrix(mat[:3, :3]).as_quat()
@@ -108,24 +111,24 @@ class TFInterface:
 
 
 class DrinkPerception(TFInterface):
-    def __init__(self, num_perception_samples=25):
+    def __init__(self, node: "Node", num_perception_samples=25):
 
         self.turned_on = False
         self.num_perception_samples = num_perception_samples
         self.bridge = CvBridge()
 
         self.color_image_sub = message_filters.Subscriber(
-            '/camera/color/image_raw', Image)
+            node, Image, '/camera/color/image_raw')
         self.camera_info_sub = message_filters.Subscriber(
-            '/camera/color/camera_info', CameraInfo)
+            node, CameraInfo, '/camera/color/camera_info')
         self.depth_image_sub = message_filters.Subscriber(
-            '/camera/aligned_depth_to_color/image_raw', Image)
-        
-        self.handle_points_pub = rospy.Publisher("/handle_points", Marker, queue_size=1)
-        self.handle_center_pub = rospy.Publisher("/handle_center", Marker, queue_size=1)
+            node, Image, '/camera/aligned_depth_to_color/image_raw')
+
+        self.handle_points_pub = node.create_publisher(Marker, "/handle_points", 1)
+        self.handle_center_pub = node.create_publisher(Marker, "/handle_center", 1)
 
         # to simulate an aruco being detected
-        self.aruco_pose_publisher_0 = rospy.Publisher("/aruco_pose_0", Pose, queue_size=10)
+        self.aruco_pose_publisher_0 = node.create_publisher(Pose, "/aruco_pose_0", 10)
 
         ts = message_filters.TimeSynchronizer(
             [self.color_image_sub,
@@ -133,7 +136,7 @@ class DrinkPerception(TFInterface):
              self.depth_image_sub], 1)
         ts.registerCallback(self.rgbdCallback)
 
-        super().__init__()
+        super().__init__(node)
 
     def turn_on(self):
         self.turned_on = True
@@ -142,9 +145,6 @@ class DrinkPerception(TFInterface):
         self.turned_on = False
 
     def rgbdCallback(self, rgb_image_msg, camera_info_msg, depth_image_msg):
-
-        # if hasattr(self, "saved") and self.saved:
-            # return
 
         if not self.turned_on:
             return
@@ -157,11 +157,6 @@ class DrinkPerception(TFInterface):
         except CvBridgeError as e:
             print(e)
             return
-
-        # print("Got images")
-        # cv2.imwrite("rgb.png", rgb_image)
-        # depth_mm = (depth_image * 1000.0).astype("uint16")
-        # cv2.imwrite("depth.png", depth_mm)
 
         # -----------------------------
         # Color mask
@@ -184,13 +179,10 @@ class DrinkPerception(TFInterface):
                 pixels.append((u, v))
 
         if len(points_3d) == 0:
-            # rospy.logwarn("No valid 3D points from mask.")
             return
 
         points_3d = np.array(points_3d)
         pixels = np.array(pixels)
-
-        # print("Found all pixels")
 
         # -----------------------------
         # DBSCAN clustering (7 cm)
@@ -200,13 +192,10 @@ class DrinkPerception(TFInterface):
             min_samples=50
         ).fit(points_3d)
 
-        # print("Ran DBSCAN")
-
         labels = clustering.labels_
         valid = labels >= 0
 
         if not np.any(valid):
-            # rospy.logwarn("DBSCAN found no clusters.")
             return
 
         unique, counts = np.unique(labels[valid], return_counts=True)
@@ -214,8 +203,6 @@ class DrinkPerception(TFInterface):
 
         cluster_pixels = pixels[labels == main_label]
         cluster_points_3d = points_3d[labels == main_label]
-
-        # print("Found cluster")
 
         # -----------------------------
         # Project cluster back to image
@@ -230,10 +217,6 @@ class DrinkPerception(TFInterface):
         vis = rgb_image.copy()
         vis[cluster_mask > 0] = (0, 0, 255)
 
-        # cv2.imwrite("handle_mask.png", vis)
-        # rospy.loginfo(
-        #     f"Saved handle_mask.png with {cluster_pixels.shape[0]} pixels")
-        
         pcd = o3d.geometry.PointCloud()
         pcd.points = o3d.utility.Vector3dVector(cluster_points_3d)
 
@@ -290,7 +273,6 @@ class DrinkPerception(TFInterface):
         self.visualizeHandleCorners(points_to_show)
 
         # Sort corners by image-space Y (top vs bottom)
-        # Smaller Y = higher in image (top)
         ys = corners_3d[:, 1]
         top_idx = np.argsort(ys)[:2]
         bottom_idx = np.argsort(ys)[2:]
@@ -302,11 +284,11 @@ class DrinkPerception(TFInterface):
         top_left, top_right = top_pts[np.argsort(top_pts[:, 0])]
         bottom_left, bottom_right = bottom_pts[np.argsort(bottom_pts[:, 0])]
 
-        # X-axis: bottom → top
+        # X-axis: bottom -> top
         x_axis = ((top_left + top_right) / 2.0) - ((bottom_left + bottom_right) / 2.0)
         x_axis = x_axis / np.linalg.norm(x_axis)
 
-        # Y-axis: right → left
+        # Y-axis: right -> left
         y_axis = ((top_left + bottom_left) / 2.0) - ((top_right + bottom_right) / 2.0)
         y_axis = y_axis / np.linalg.norm(y_axis)
 
@@ -323,14 +305,14 @@ class DrinkPerception(TFInterface):
 
         transform = self.get_frame_to_frame_transform(camera_info_msg)
 
-        if transform is not None:   
+        if transform is not None:
             base_to_camera = self.make_homogeneous_transform(transform)
 
             # cam to tag homogeneous transform
             camera_to_tag = np.zeros((4, 4))
             camera_to_tag[:3, :3] = R_mat
             camera_to_tag[:3, 3] = center_3d
-            camera_to_tag[3, 3] = 1 
+            camera_to_tag[3, 3] = 1
 
             # base to tag homogeneous transform and update tf
             base_to_tag = np.dot(base_to_camera, camera_to_tag)
@@ -339,7 +321,7 @@ class DrinkPerception(TFInterface):
 
     def update_aruco_pose(self, aruco_pose_mat):
 
-        position, orientation = self.matrix_to_pose(aruco_pose_mat)        
+        position, orientation = self.matrix_to_pose(aruco_pose_mat)
         pose_msg = Pose()
         pose_msg.position.x = position[0]
         pose_msg.position.y = position[1]
@@ -361,12 +343,12 @@ class DrinkPerception(TFInterface):
         mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
         mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
         return mask
-    
+
     def visualizeHandle(self, points):
 
         marker = Marker()
         marker.header.frame_id = "camera_color_optical_frame"  # IMPORTANT: match your camera TF
-        marker.header.stamp = rospy.Time.now()
+        marker.header.stamp = self.node.get_clock().now().to_msg()
 
         marker.ns = "handle_points"
         marker.id = 0
@@ -384,7 +366,7 @@ class DrinkPerception(TFInterface):
         marker.color.a = 1.0
 
         # Lifetime (0 = forever)
-        marker.lifetime = rospy.Duration(0)
+        marker.lifetime = Duration().to_msg()
 
         # Fill points
         for x, y, z in points:
@@ -406,7 +388,7 @@ class DrinkPerception(TFInterface):
         # --- Center marker (green sphere) ---
         corner_marker = Marker()
         corner_marker.header.frame_id = "camera_color_optical_frame"
-        corner_marker.header.stamp = rospy.Time.now()
+        corner_marker.header.stamp = self.node.get_clock().now().to_msg()
 
         corner_marker.ns = "handle_corners"
         corner_marker.id = 1
@@ -422,7 +404,7 @@ class DrinkPerception(TFInterface):
         corner_marker.color.b = 1.0
         corner_marker.color.a = 1.0
 
-        corner_marker.lifetime = rospy.Duration(0)
+        corner_marker.lifetime = Duration().to_msg()
 
         for x, y, z in points_3d:
             p = Point()
@@ -435,15 +417,11 @@ class DrinkPerception(TFInterface):
 
     def pixel2World(self, camera_info, image_x, image_y, depth_image):
 
-        # print("Image pixels: ", image_x, image_y)
-        # print("Depth shape: ", depth_image.shape)
-
         if image_y >= depth_image.shape[0] or image_x >= depth_image.shape[1]:
             return False, None
 
         depth = depth_image[image_y, image_x]
         depth = depth / 1000 # convert from mm to m
-        # print("Depth: ", depth)
 
         if math.isnan(depth) or depth < 0.05 or depth > 1.0:
             return False, None
@@ -457,12 +435,13 @@ class DrinkPerception(TFInterface):
         world_y = (depth / fy) * (image_y - cy)
         world_z = depth
 
-        # print("3D Pixel: ", world_x, world_y, world_z)
-
         return True, (world_x, world_y, world_z)
 
 
 if __name__ == '__main__':
-    rospy.init_node('DrinkPerception')
-    DrinkPerception()
-    rospy.spin()
+    rclpy.init()
+    node = rclpy.create_node('DrinkPerception')
+    DrinkPerception(node)
+    rclpy.spin(node)
+    node.destroy_node()
+    rclpy.shutdown()

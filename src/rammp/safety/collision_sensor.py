@@ -2,12 +2,13 @@
 This senses a collision in the robot arm using joint force torque sensing
 """
 try:
-    import rospy
+    import rclpy
+    from rclpy.node import Node
     from std_msgs.msg import Bool
     from sensor_msgs.msg import JointState
-    ROSPY_IMPORTED = True
+    RCLPY_IMPORTED = True
 except ModuleNotFoundError:
-    ROSPY_IMPORTED = False
+    RCLPY_IMPORTED = False
 
 import os
 import math
@@ -17,15 +18,16 @@ from pathlib import Path
 import pinocchio as pin
 from pybullet_helpers.joint import JointPositions, JointVelocities
 
-class CollisionSensor:
+class CollisionSensor(Node):
     """See docstring above."""
 
     # Threshold for collision detection
     COLLISION_THRESHOLD = 20.0
 
     def __init__(self):
+        super().__init__('collision_sensor')
 
-        assert ROSPY_IMPORTED, "ROS is required for CollisionSensor"
+        assert RCLPY_IMPORTED, "ROS is required for CollisionSensor"
 
         self._print_once = True
         self.file_path = Path(__file__).parent.parent / "control" / "robot_controller" / "urdfs"
@@ -36,14 +38,14 @@ class CollisionSensor:
         self.data = self.model.createData()
         self.q_pin = np.zeros(self.model.nq)
 
-        self._collision_pub = rospy.Publisher("/collision_free", Bool, queue_size=1)
-        self._joint_state_sub = rospy.Subscriber(
-            "/robot_joint_states", JointState, self._joint_state_callback
+        self._collision_pub = self.create_publisher(Bool, "/collision_free", 1)
+        self._joint_state_sub = self.create_subscription(
+            JointState, "/robot_joint_states", self._joint_state_callback, 10
         )
 
         self._disable_collision_sensor = False
-        self._disable_collision_sensor_sub = rospy.Subscriber(
-            "/disable_collision_sensor", Bool, self._disable_collision_sensor_callback
+        self._disable_collision_sensor_sub = self.create_subscription(
+            Bool, "/disable_collision_sensor", self._disable_collision_sensor_callback, 10
         )
 
     def _disable_collision_sensor_callback(self, msg: "Bool") -> None:
@@ -72,7 +74,7 @@ class CollisionSensor:
         assert len(joint_pos) == 8, "Expected 8 joint positions"
         assert len(joint_vel) == 8, "Expected 8 joint velocities"
         assert len(joint_tau) == 8, "Expected 8 joint torques"
-        
+
         if not self._disable_collision_sensor:
             has_collision = self.sense_collisions(joint_pos, joint_vel, joint_tau)
             self._collision_pub.publish(Bool(data=not has_collision))
@@ -82,13 +84,9 @@ class CollisionSensor:
         else:
             self._collision_pub.publish(Bool(data=True))
 
-    # Todo: Add JointTorques to pybullet_helpers.joint 
+    # Todo: Add JointTorques to pybullet_helpers.joint
     def sense_collisions(self, joint_positions: JointPositions, joint_velocities: JointVelocities, torque_readings: JointPositions) -> bool:
         """Senses collisions with environment."""
-        
-        # print("joint_positions: ", joint_positions)
-        # print("joint_velocities: ", joint_velocities)
-        # print("torque_readings: ", torque_readings)
 
         if np.linalg.norm(torque_readings) < 1e-6:
             # No torque readings means joint compliant mode is on
@@ -122,14 +120,16 @@ class CollisionSensor:
         # Very high error means collision, otherwise model error
         if max_error > self.COLLISION_THRESHOLD:
             return True
-        
+
         return False
-    
+
 if __name__ == "__main__":
-    
+
     parser = argparse.ArgumentParser()
     args = parser.parse_args()
 
-    rospy.init_node("collision_sensor")
+    rclpy.init()
     monitor = CollisionSensor()
-    rospy.spin()
+    rclpy.spin(monitor)
+    monitor.destroy_node()
+    rclpy.shutdown()

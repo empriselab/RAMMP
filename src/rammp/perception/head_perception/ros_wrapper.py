@@ -9,12 +9,14 @@ import cv2
 import argparse
 import message_filters
 import numpy as np
-import rospy
+import rclpy
+from rclpy.node import Node
+from rclpy.time import Time
+from rclpy.duration import Duration
 import tf2_ros
 from cv_bridge import CvBridge, CvBridgeError
 from geometry_msgs.msg import Point, TransformStamped, WrenchStamped
 from scipy.spatial.transform import Rotation
-from sensor_msgs import point_cloud2
 from sensor_msgs.msg import CameraInfo, Image, PointCloud2, PointField
 from std_msgs.msg import Bool, Float64, Float64MultiArray, String
 from visualization_msgs.msg import Marker, MarkerArray
@@ -24,9 +26,9 @@ from rammp.perception.head_perception.deca_perception import (
 )
 
 class HeadPerceptionROSWrapper:
-    def __init__(self, record_goal_pose=False):
-        # rospy.init_node("HeadPerception")
+    def __init__(self, node: "Node", record_goal_pose=False):
 
+        self.node = node
         self.head_perception = HeadPerception(record_goal_pose)
 
         # Top Camera Data
@@ -39,62 +41,57 @@ class HeadPerceptionROSWrapper:
         self.bridge = CvBridge()
 
         # Head Pose Visualisation
-        self.voxel_publisher = rospy.Publisher(
-            "/head_perception/voxels/marker_array", MarkerArray, queue_size=10
+        self.voxel_publisher = self.node.create_publisher(
+            MarkerArray, "/head_perception/voxels/marker_array", 10
         )
 
-        self.tool_publisher = rospy.Publisher(
-            "/head_perception/tool/marker_array", MarkerArray, queue_size=10
+        self.tool_publisher = self.node.create_publisher(
+            MarkerArray, "/head_perception/tool/marker_array", 10
         )
 
-        self.noisy_reading_publisher = rospy.Publisher(
-            "/head_perception/unexpected", Bool, queue_size=10
+        self.noisy_reading_publisher = self.node.create_publisher(
+            Bool, "/head_perception/unexpected", 10
         )
 
         self.tf_buffer_lock = Lock()
         self.tfBuffer = tf2_ros.Buffer()  # Using default cache time of 10 secs
-        self.listener = tf2_ros.TransformListener(self.tfBuffer)
+        self.listener = tf2_ros.TransformListener(self.tfBuffer, self.node)
 
-        self.broadcaster = tf2_ros.TransformBroadcaster()
+        self.broadcaster = tf2_ros.TransformBroadcaster(self.node)
 
         queue_size = 1000
         self.color_image_sub = message_filters.Subscriber(
-            "/camera/color/image_raw",
+            self.node,
             Image,
-            queue_size=queue_size,
-            buff_size=65536 * queue_size,
+            "/camera/color/image_raw",
         )
         self.camera_info_sub = message_filters.Subscriber(
-            "/camera/color/camera_info",
+            self.node,
             CameraInfo,
-            queue_size=queue_size,
-            buff_size=65536 * queue_size,
+            "/camera/color/camera_info",
         )
         self.depth_image_sub = message_filters.Subscriber(
-            "/camera/aligned_depth_to_color/image_raw",
+            self.node,
             Image,
-            queue_size=queue_size,
-            buff_size=65536 * queue_size,
+            "/camera/aligned_depth_to_color/image_raw",
         )
         ts_top = message_filters.TimeSynchronizer(
             [self.color_image_sub, self.camera_info_sub, self.depth_image_sub],
             queue_size=queue_size,
         )
         ts_top.registerCallback(self.rgbdCallback)
-        ts_top.enable_reset = True
 
         self.filter_noisy_readings = False
-        self.filter_noisy_readings_sub = rospy.Subscriber(
-            "/head_perception/set_filter_noisy_readings", Bool, self.setFilterNoisyReadingsCallback, queue_size=1
+        self.filter_noisy_readings_sub = self.node.create_subscription(
+            Bool, "/head_perception/set_filter_noisy_readings", self.setFilterNoisyReadingsCallback, 1
         )
-    
+
         time.sleep(2.0) # sleep until all subscribers are registered
 
     def setFilterNoisyReadingsCallback(self, msg):
         self.filter_noisy_readings = msg.data
 
     def rgbdCallback(self, rgb_image_msg, camera_info_msg, depth_image_msg):
-        # print("RGB Callback")
 
         try:
             # Convert your ROS Image message to OpenCV2
@@ -126,7 +123,7 @@ class HeadPerceptionROSWrapper:
                 transform = self.tfBuffer.lookup_transform(
                     "base_link",
                     target_frame,
-                    rospy.Time(secs=stamp.secs, nsecs=stamp.nsecs),
+                    Time(seconds=stamp.sec, nanoseconds=stamp.nanosec),
                 )
                 return transform
         except (
@@ -134,19 +131,16 @@ class HeadPerceptionROSWrapper:
             tf2_ros.ConnectivityException,
             tf2_ros.ExtrapolationException,
         ):
-            # print("Exception finding transform between base_link and", target_frame)
             return None
 
     def run_head_perception(self, visualize=False):
 
-        # print("Running Head Perception")
         transform = None
         while transform is None:
             camera_color_data, camera_info_data, camera_depth_data, _ = (
                 self.get_camera_data()
             )
             if camera_info_data is None:
-                # print("No camera data")
                 time.sleep(0.01)
                 continue
             transform = self.get_base_to_camera_transform(camera_info_data)
@@ -180,13 +174,11 @@ class HeadPerceptionROSWrapper:
             filter_noisy_readings=self.filter_noisy_readings,
         )
         run_deca_end_time = time.time()
-        # print("Run DECA time: ", run_deca_end_time - run_deca_start_time)
 
         if head_perception_data is not None:
 
             if self.filter_noisy_readings: # do not shutdown robot if warm starting / kill_on_noisy_reading is False
                 if head_perception_data["noisy_reading"]:
-                    # print("Noisy reading detected from DECA")
                     self.noisy_reading_publisher.publish(Bool(data=True))
                     return None
 
@@ -211,16 +203,13 @@ class HeadPerceptionROSWrapper:
             if self.filter_noisy_readings:
                 print("None returned from DECA")
                 self.noisy_reading_publisher.publish(Bool(data=True))
-            # print("No head perception data")
             return None
 
     def updateTF(self, source_frame, target_frame, pose):
 
-        # return #do nothing to surpress warnings with rosbags
-
         t = TransformStamped()
 
-        t.header.stamp = rospy.Time.now()
+        t.header.stamp = self.node.get_clock().now().to_msg()
         t.header.frame_id = source_frame
         t.child_frame_id = target_frame
 
@@ -238,20 +227,17 @@ class HeadPerceptionROSWrapper:
 
     def visualizeToolTipTarget(self, pose):
 
-        # pose = self.base_to_camera @ pose
-
         return
 
         markerArray = MarkerArray()
 
         tool_marker = Marker()
         tool_marker.header.seq = 0
-        tool_marker.header.stamp = rospy.Time.now()
+        tool_marker.header.stamp = self.node.get_clock().now().to_msg()
         if self.head_perception.record_goal_pose:
             tool_marker.header.frame_id = "camera_color_optical_frame"
         else:
             tool_marker.header.frame_id = "base_link"
-        # print(" --- Header frame id: ", tool_marker.header.frame_id)
         tool_marker.ns = "tool_marker"
         tool_marker.id = 1
         tool_marker.type = tool_marker.MESH_RESOURCE  # CUBE LIST
@@ -259,10 +245,10 @@ class HeadPerceptionROSWrapper:
             tool_marker.mesh_resource = "file:////home/isacc/rammp_ws/src/kortex_description/tools/drinking_tool/tool_tip.stl"
         else:
             raise ValueError(f"Mesh does not exist for tool: {self.head_perception}")
-        
+
         tool_marker.mesh_use_embedded_materials = True
         tool_marker.action = tool_marker.ADD  # ADD
-        tool_marker.lifetime = rospy.Duration()
+        tool_marker.lifetime = Duration().to_msg()
 
         tool_marker.color.a = 1.0
         tool_marker.color.r = 0.5
@@ -289,13 +275,11 @@ class HeadPerceptionROSWrapper:
 
     def visualizeVoxels(self, voxels, namespace="visualize_voxels"):
 
-        # print(voxels)
-
         markerArray = MarkerArray()
 
         marker = Marker()
         marker.header.seq = 0
-        marker.header.stamp = rospy.Time.now()
+        marker.header.stamp = self.node.get_clock().now().to_msg()
         marker.header.frame_id = "base_link"
         marker.ns = namespace
         marker.id = 1
@@ -303,14 +287,14 @@ class HeadPerceptionROSWrapper:
         # CUBE LIST
         marker.action = 0
         # ADD
-        marker.lifetime = rospy.Duration()
+        marker.lifetime = Duration().to_msg()
         marker.scale.x = 0.01
         marker.scale.y = 0.01
         marker.scale.z = 0.01
-        marker.color.r = 1
-        marker.color.g = 1
-        marker.color.b = 0
-        marker.color.a = 1
+        marker.color.r = 1.0
+        marker.color.g = 1.0
+        marker.color.b = 0.0
+        marker.color.a = 1.0
 
         for i in range(voxels.shape[0]):
 
@@ -327,18 +311,14 @@ class HeadPerceptionROSWrapper:
 
     def save_tool_tip_transform(self, tool):
 
-        rate = rospy.Rate(1000.0)
-        while not rospy.is_shutdown():
+        while rclpy.ok():
             try:
                 print("Looking for transform")
                 with self.tf_buffer_lock:
-                    transform = self.tfBuffer.lookup_transform('camera_color_optical_frame', tool + '_tip', rospy.Time())
+                    transform = self.tfBuffer.lookup_transform('camera_color_optical_frame', tool + '_tip', Time())
                     break
             except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException):
-                try:
-                    rate.sleep()
-                except Exception as inst:
-                    print(inst)
+                time.sleep(0.001)
                 continue
 
         tool_planar_tip_pose = np.zeros((4,4))
@@ -352,7 +332,7 @@ class HeadPerceptionROSWrapper:
         self.head_perception.set_tool(tool)
 
 if __name__ == "__main__":
-    
+
     parser = argparse.ArgumentParser()
     parser.add_argument("--record_goal_pose", action="store_true")
     parser.add_argument("--tool", type=str, default="fork")
@@ -361,17 +341,21 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    rospy.init_node("head_perception", anonymous=True)
+    rclpy.init()
+    node = rclpy.create_node("head_perception")
 
     print("Args.record_goal_pose: ", args.record_goal_pose)
 
-    head_perception_ros_wrapper = HeadPerceptionROSWrapper(record_goal_pose=args.record_goal_pose)
+    head_perception_ros_wrapper = HeadPerceptionROSWrapper(node, record_goal_pose=args.record_goal_pose)
     time.sleep(2.0)  # let the buffers fill up
 
     if args.set_tool_tip_transform:
         head_perception_ros_wrapper.save_tool_tip_transform(args.tool)
     head_perception_ros_wrapper.set_tool(args.tool)
-    while not rospy.is_shutdown():
+    while rclpy.ok():
         print("Running head perception")
+        rclpy.spin_once(node, timeout_sec=0)
         head_perception_ros_wrapper.run_head_perception(visualize=args.visualize)
-        # rospy.sleep(0.1)
+
+    node.destroy_node()
+    rclpy.shutdown()

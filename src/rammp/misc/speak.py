@@ -1,17 +1,18 @@
-import rospy
+import rclpy
+from rclpy.node import Node
 from std_msgs.msg import String
 import tempfile
 from gtts import gTTS
 from playsound import playsound
 
-class Speak:
+class Speak(Node):
     def __init__(self):
-        rospy.init_node('Speak', anonymous=True)
-        rospy.Subscriber("/speak", String, self.callback, queue_size=10)
+        super().__init__('Speak')
+        self.create_subscription(String, "/speak", self.callback, 10)
         print("Speak node initialized")
 
     # Speak the text
-    def callback(self, msg):        
+    def callback(self, msg):
         text = msg.data
         print("Speaking: ", text)
 
@@ -22,8 +23,8 @@ class Speak:
             playsound(voice.name)
 
 if __name__ == "__main__":
-    try:
-        Speak()
-        rospy.spin()
-    except rospy.ROSInterruptException:
-        pass
+    rclpy.init()
+    speak_node = Speak()
+    rclpy.spin(speak_node)
+    speak_node.destroy_node()
+    rclpy.shutdown()

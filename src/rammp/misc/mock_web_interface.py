@@ -19,7 +19,8 @@ Commands:
     quit
 """
 
-import rospy
+import rclpy
+from rclpy.node import Node
 import json
 from std_msgs.msg import String
 
@@ -37,15 +38,17 @@ Commands:
 
 
 def main():
-    rospy.init_node("mock_web_interface")
-    pub = rospy.Publisher("WebAppComm", String, queue_size=10)
+    rclpy.init()
+    node = rclpy.create_node("mock_web_interface")
+    pub = node.create_publisher(String, "WebAppComm", 10)
 
-    rospy.sleep(1.0)  # allow publisher to connect
+    import time
+    time.sleep(1.0)  # allow publisher to connect
 
     print("Mock Web Interface Started.")
     print(HELP)
 
-    while not rospy.is_shutdown():
+    while rclpy.ok():
         try:
             cmd = input("[webapp] > ").strip()
         except (KeyboardInterrupt, EOFError):
@@ -74,7 +77,7 @@ def main():
             raw_json = cmd[4:].strip()
             try:
                 json.loads(raw_json)
-                pub.publish(String(raw_json))
+                pub.publish(String(data=raw_json))
                 print("Sent:", raw_json)
             except json.JSONDecodeError as e:
                 print("Invalid JSON:", e)
@@ -85,10 +88,12 @@ def main():
             continue
 
         payload = json.dumps(msg)
-        pub.publish(String(payload))
+        pub.publish(String(data=payload))
         print("Sent:", payload)
 
     print("Mock Web Interface Stopped.")
+    node.destroy_node()
+    rclpy.shutdown()
 
 
 if __name__ == "__main__":

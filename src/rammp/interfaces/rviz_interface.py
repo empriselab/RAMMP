@@ -9,54 +9,48 @@ from pybullet_helpers.joint import JointPositions
 from scipy.spatial.transform import Rotation as R
 
 try:
-    import rospy
+    import rclpy
+    from rclpy.node import Node
     from sensor_msgs.msg import JointState
     from std_msgs.msg import String
     from visualization_msgs.msg import MarkerArray, Marker
     import tf2_ros
     from geometry_msgs.msg import TransformStamped, Pose as PoseMsg
-    ROSPY_IMPORTED = True
+    RCLPY_IMPORTED = True
 except ModuleNotFoundError as e:
     # print(f"ROS not imported: {e}")
-    ROSPY_IMPORTED = False
+    RCLPY_IMPORTED = False
 
 from rammp.simulation.scene_description import SceneDescription
 
 class RVizInterface:
     """An interface for visualization on rviz"""
 
-    def __init__(self, scene_description: SceneDescription) -> None:
+    def __init__(self, node: "Node", scene_description: SceneDescription) -> None:
 
-        assert ROSPY_IMPORTED, "ROS is required to run RVizInterface"
+        assert RCLPY_IMPORTED, "ROS is required to run RVizInterface"
 
+        self.node = node
         self._scene_description = scene_description
 
         # Create publishers for rviz simulation.
-        self.sim_joint_publishers = rospy.Publisher("/sim/robot_joint_states", JointState, queue_size=10)
-        self.marker_pub = rospy.Publisher("/visualization_marker", Marker, queue_size=10)
-        
+        self.sim_joint_publishers = self.node.create_publisher(JointState, "/sim/robot_joint_states", 10)
+        self.marker_pub = self.node.create_publisher(Marker, "/visualization_marker", 10)
+
         # Create a static transform broadcaster for rviz simulation.
-        self.static_transform_broadcaster = tf2_ros.StaticTransformBroadcaster()
+        self.static_transform_broadcaster = tf2_ros.StaticTransformBroadcaster(self.node)
 
         # Create a broadcaster for tf2 transforms.
-        self.broadcaster = tf2_ros.TransformBroadcaster()
+        self.broadcaster = tf2_ros.TransformBroadcaster(self.node)
 
         # Wait for RViz to subscribe to the topic.
-        rospy.sleep(1)
-
-        # Visualize the table.     
-        # Rajat ToDo: Resolve the path error
-        # self._add_mesh(self._scene_description.table_pose, str(self._scene_description.table_mesh_path), marker_id=0)
+        time.sleep(1)
 
         # Visualize the vention stand.
         self._add_cube(self._scene_description.robot_holder_pose,
                 self._scene_description.robot_holder_half_extents,
                 self._scene_description.robot_holder_rgba,
                 marker_id=1)
-        
-        # Visualize the wheelchair.
-        # Rajat ToDo: Resolve the path error
-        # self._add_mesh(self._scene_description.wheelchair_pose, str(self._scene_description.wheelchair_mesh_path), marker_id=3)
 
         # Visualize the conservative bounding box.
         self._add_cube(self._scene_description.conservative_bb_pose,
@@ -69,20 +63,19 @@ class RVizInterface:
 
         # Set initial tool states
         self.tool_update(False, "drink", self._scene_description.drink_pose)
-        # self.tool_update(False, "plate", self._scene_description.plate_pose)
-    
+
     def joint_state_update(self, joints: JointPositions):
         self.sim_joint_publishers.publish(
                 JointState(
                     name=[
-                        "joint_1", "joint_2", "joint_3", 
-                        "joint_4", "joint_5", "joint_6", 
+                        "joint_1", "joint_2", "joint_3",
+                        "joint_4", "joint_5", "joint_6",
                         "joint_7", "finger_joint"
                     ],
                     position=joints[:7] + [0.0]  # Assuming you want to add 0.0 for the finger_joint
                 )
             )
-        
+
     def tool_update(self, pick: bool, held_object: str, object_pose: Pose) -> None:
 
         if held_object == "drink":
@@ -94,11 +87,11 @@ class RVizInterface:
             self.publish_static_transform("sim/finger_tip", "sim/" + tool_base, object_pose)
         else:
             self.publish_static_transform("sim/base_link", "sim/" + tool_base, object_pose)
-    
+
     def publish_static_transform(self, parent_frame: str, child_frame: str, pose: Pose) -> None:
 
         static_transform_stamped = TransformStamped()
-        static_transform_stamped.header.stamp = rospy.Time.now()
+        static_transform_stamped.header.stamp = self.node.get_clock().now().to_msg()
         static_transform_stamped.header.frame_id = parent_frame
         static_transform_stamped.child_frame_id = child_frame
 
@@ -113,17 +106,17 @@ class RVizInterface:
 
         self.static_transform_broadcaster.sendTransform(static_transform_stamped)
 
-    def _add_cube(self, 
+    def _add_cube(self,
                 pose: Pose, half_extents: tuple[float, float, float],
                 rgba: tuple[float, float, float, float],
                 marker_id: int) -> None:
-        
+
         marker = Marker()
 
         marker.ns = "cube"
         marker.id = marker_id
         marker.type = Marker.CUBE
-        marker.header.stamp = rospy.Time.now()
+        marker.header.stamp = self.node.get_clock().now().to_msg()
         marker.header.frame_id = "sim/base_link"
         marker.action = marker.ADD
 
@@ -146,11 +139,11 @@ class RVizInterface:
 
         self.marker_pub.publish(marker)
 
-    def _add_mesh(self, 
-            pose: Pose, 
-            mesh_path: str, 
+    def _add_mesh(self,
+            pose: Pose,
+            mesh_path: str,
             marker_id: int) -> None:
-        
+
         marker = Marker()
 
         marker.ns = "mesh"
@@ -158,7 +151,7 @@ class RVizInterface:
         marker.type = Marker.MESH_RESOURCE
         marker.mesh_resource = mesh_path
         marker.mesh_use_embedded_materials = True
-        marker.header.stamp = rospy.Time.now()
+        marker.header.stamp = self.node.get_clock().now().to_msg()
         marker.header.frame_id = "sim/base_link"
         marker.action = marker.ADD
 
@@ -169,7 +162,7 @@ class RVizInterface:
         marker.pose.orientation.y = pose.orientation[1]
         marker.pose.orientation.z = pose.orientation[2]
         marker.pose.orientation.w = pose.orientation[3]
-        
+
         marker.scale.x = 1
         marker.scale.y = 1
         marker.scale.z = 1
@@ -180,7 +173,7 @@ class RVizInterface:
 
         t = TransformStamped()
 
-        t.header.stamp = rospy.Time.now()
+        t.header.stamp = self.node.get_clock().now().to_msg()
         t.header.frame_id = source_frame
         t.child_frame_id = target_frame
 

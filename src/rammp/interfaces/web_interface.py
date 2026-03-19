@@ -9,10 +9,11 @@ from pathlib import Path
 from typing import Any, Callable, Optional
 
 try:
-    import rospy
+    import rclpy
+    from rclpy.node import Node
     from std_msgs.msg import String
 except ModuleNotFoundError:
-    rospy = None
+    rclpy = None
     String = None
 
 
@@ -27,10 +28,11 @@ class WebInterface:
       - {"task": "reset", "type": "reset"}  (if webapp sends finish_feeding, preserved as reset signal)
     """
 
-    def __init__(self, task_selection_queue: queue.Queue, log_dir: Path) -> None:
-        if rospy is None:
-            raise RuntimeError("rospy not available. Source your ROS environment before running.")
+    def __init__(self, node: "Node", task_selection_queue: queue.Queue, log_dir: Path) -> None:
+        if rclpy is None:
+            raise RuntimeError("rclpy not available. Source your ROS2 environment before running.")
 
+        self.node = node
         self.task_selection_queue = task_selection_queue
         self.received_messages: queue.Queue[dict[str, Any]] = queue.Queue()
 
@@ -40,8 +42,8 @@ class WebInterface:
         self.webapp_received_messages_log = log_dir / "webapp_received_messages.txt"
 
         # ROS pub/sub
-        self.web_interface_publisher = rospy.Publisher("/ServerComm", String, queue_size=10)
-        self.web_interface_sub = rospy.Subscriber("WebAppComm", String, self._message_callback, queue_size=100)
+        self.web_interface_publisher = self.node.create_publisher(String, "/ServerComm", 10)
+        self.web_interface_sub = self.node.create_subscription(String, "WebAppComm", self._message_callback, 100)
         time.sleep(1.0)  # let connections settle
 
         # State
@@ -56,7 +58,7 @@ class WebInterface:
     def _send_message(self, msg_dict: dict[str, Any]) -> None:
         """Publish JSON to /ServerComm and log it."""
         payload = json.dumps(msg_dict)
-        self.web_interface_publisher.publish(String(payload))
+        self.web_interface_publisher.publish(String(data=payload))
         with open(self.webapp_sent_messages_log, "a") as f:
             f.write(payload + "\n")
 
@@ -148,11 +150,12 @@ class WebInterface:
 
 
 if __name__ == "__main__":
-    rospy.init_node("web_interface_drink_only")
+    rclpy.init()
+    node = rclpy.create_node("web_interface_drink_only")
 
     log_dir = Path(__file__).parent / "web_interface_log"
     task_selection_queue: queue.Queue = queue.Queue()
-    web_interface = WebInterface(task_selection_queue, log_dir)
+    web_interface = WebInterface(node, task_selection_queue, log_dir)
 
     # Example usage pattern:
     # 1) show task selection
@@ -169,3 +172,6 @@ if __name__ == "__main__":
 
         # 3) go back to task selection (optionally with sip autocontinue)
         web_interface.ready_for_task_selection(last_task_type="sip")
+
+    node.destroy_node()
+    rclpy.shutdown()

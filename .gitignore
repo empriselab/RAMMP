@@ -1,1 +1,4 @@
 src/rammp/perception/head_perception/DECA/data/*
+
+# Ignore all files in the DECA/data directory
+*/Demo-Software/

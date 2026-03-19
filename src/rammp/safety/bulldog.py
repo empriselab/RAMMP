@@ -2,7 +2,8 @@
 Runs a server-side (run on NUC) watchdog to ensure robot is not in a state of emergency stop (from the user / experimentor emergency stop button).
 '''
 
-import rospy
+import rclpy
+from rclpy.node import Node
 import numpy as np
 import time
 from enum import Enum
@@ -17,7 +18,6 @@ import time
 import numpy as np
 from pathlib import Path
 
-import rospy
 from std_msgs.msg import Bool
 
 from rammp.control.robot_controller.arm_interface import ArmInterface, ArmManager, NUC_HOSTNAME, ARM_RPC_PORT, RPC_AUTHKEY
@@ -29,8 +29,9 @@ BULLDOG_RUN_FREQUENCY = 1000
 
 from rammp.safety.utils import PeekableQueue, AnomalyStatus
 
-class BullDog:
+class BullDog(Node):
     def __init__(self):
+        super().__init__('BullDog')
         print("BullDog awakening...")
         # Register ArmInterface (no lambda needed on the client-side)
         ArmManager.register("ArmInterface")
@@ -38,23 +39,23 @@ class BullDog:
         # Client setup
         self.manager = ArmManager(address=(NUC_HOSTNAME, ARM_RPC_PORT), authkey=RPC_AUTHKEY)
         self.manager.connect()
-        
+
         # This will now use the single, shared instance of ArmInterface
         self._arm_interface = self.manager.ArmInterface()
 
         queue_size = 1000
-        self.user_emergency_stop_sub = rospy.Subscriber('/user_estop', Bool, self.userEmergencyStopCallback, queue_size = queue_size, buff_size = 65536*queue_size)
+        self.user_emergency_stop_sub = self.create_subscription(Bool, '/user_estop', self.userEmergencyStopCallback, queue_size)
         self.user_emergency_stop_timestamps = PeekableQueue()
         self.user_emergency_stop_pressed = False
 
-        self.experimentor_emergency_stop_sub = rospy.Subscriber('/experimentor_estop', Bool, self.experimentorEmergencyStopCallback, queue_size = queue_size, buff_size = 65536*queue_size)
+        self.experimentor_emergency_stop_sub = self.create_subscription(Bool, '/experimentor_estop', self.experimentorEmergencyStopCallback, queue_size)
         self.experimentor_emergency_stop_timestamps = PeekableQueue()
         self.experimentor_emergency_stop_pressed = False
 
-        self.bulldog_status_pub = rospy.Publisher('/bulldog_status', Bool, queue_size=1)
+        self.bulldog_status_pub = self.create_publisher(Bool, '/bulldog_status', 1)
 
-        # Path is hardcoded because emprise uses two machines, 
-        # isacc for compute and nuc for robot control, 
+        # Path is hardcoded because emprise uses two machines,
+        # isacc for compute and nuc for robot control,
         # and we need to transmit logs from nuc (where bulldog runs) to isacc
         self.remote_execution_log_path = "/home/isacc/deployment_ws/src/rammp/src/rammp/integration/log/nuc_execution_log.txt"
         hostname = "192.168.1.12"
@@ -111,16 +112,16 @@ class BullDog:
         anomaly = AnomalyStatus.NO_ANOMALY
         start_time = time.time()
         frequencies = []
-        for _queue, _threshold, _anomaly in [(self.user_emergency_stop_timestamps, USER_ESTOP_FREQUENCY_THRESHOLD, AnomalyStatus.USER_ESTOP_FREQUENCY), 
+        for _queue, _threshold, _anomaly in [(self.user_emergency_stop_timestamps, USER_ESTOP_FREQUENCY_THRESHOLD, AnomalyStatus.USER_ESTOP_FREQUENCY),
                                             (self.experimentor_emergency_stop_timestamps, EXPERIMENTOR_ESTOP_FREQUENCY_THRESHOLD, AnomalyStatus.EXPERIMENTOR_ESTOP_FREQUENCY)]:
             while _queue.peek() < start_time - 1.0:
                 _queue.get()
             queue_size = _queue.qsize()
             if queue_size < _threshold:
                 print(f"Frequency: {queue_size} for {_anomaly}")
-                rospy.loginfo(f"Frequency: {queue_size} for {_anomaly}")
+                self.get_logger().info(f"Frequency: {queue_size} for {_anomaly}")
                 anomaly = _anomaly
-                break   
+                break
             frequencies.append(queue_size)
 
         if self.second_counter == BULLDOG_RUN_FREQUENCY:
@@ -132,23 +133,22 @@ class BullDog:
                                     (self.experimentor_emergency_stop_pressed, AnomalyStatus.EXPERIMENTOR_ESTOP_PRESSED)]:
             if _unexpected:
                 print(f"Unexpected: {_anomaly}")
-                rospy.loginfo(f"Unexpected: {_anomaly}")
+                self.get_logger().info(f"Unexpected: {_anomaly}")
                 anomaly = _anomaly
                 break
 
         if anomaly != AnomalyStatus.NO_ANOMALY:
             self._arm_interface.emergency_stop()
             print(f"AnomalyStatus detected: {anomaly}")
-            rospy.loginfo(f"AnomalyStatus detected: {anomaly}")
+            self.get_logger().info(f"AnomalyStatus detected: {anomaly}")
             self.write_to_remote(f"Anomaly Detected: {AnomalyStatus.get_error_message(anomaly)}")
-            # with open(self.execution_log_path, 'a') as f:
-                # f.write(f"Anomaly Detected: {AnomalyStatus.get_error_message(anomaly)}\n") 
 
         self.bulldog_status_pub.publish(Bool(data=anomaly == AnomalyStatus.NO_ANOMALY))
         return anomaly
-    
+
     def run(self):
-        while not rospy.is_shutdown():
+        while rclpy.ok():
+            rclpy.spin_once(self, timeout_sec=0)
             start_time = time.time()
             status = self.check_status()
             if status != AnomalyStatus.NO_ANOMALY:
@@ -159,8 +159,8 @@ class BullDog:
 
 if __name__ == '__main__':
 
-    rospy.init_node('BullDog', anonymous=True)
+    rclpy.init()
     bulldog = BullDog()
-    
     bulldog.run()
-    
+    bulldog.destroy_node()
+    rclpy.shutdown()

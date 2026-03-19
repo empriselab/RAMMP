@@ -12,7 +12,9 @@ import pickle
 
 
 # try:
-import rospy
+import rclpy
+from rclpy.node import Node
+from rclpy.time import Time
 from sensor_msgs.msg import JointState
 from std_msgs.msg import String, Bool
 import tf2_ros
@@ -21,7 +23,7 @@ from geometry_msgs.msg import WrenchStamped, Point, Pose as PoseMsg
 from rammp.perception.head_perception.ros_wrapper import HeadPerceptionROSWrapper
 from rammp.perception.drink_perception.drink_perception import DrinkPerception
 # except ModuleNotFoundError:
-#     ROSPY_IMPORTED = False
+#     RCLPY_IMPORTED = False
 
 from rammp.control.robot_controller.arm_client import ArmInterfaceClient
 from rammp.utils.camera_utils import CustomCameraInfo
@@ -29,7 +31,8 @@ from rammp.utils.camera_utils import CustomCameraInfo
 class PerceptionInterface:
     """An interface for perception (robot joints, human head poses, etc.)."""
 
-    def __init__(self, robot_interface: ArmInterfaceClient | None, record_goal_pose: bool = False, simulate_head_perception: bool = False, log_dir: str | None = None) -> None:
+    def __init__(self, node: "Node", robot_interface: ArmInterfaceClient | None, record_goal_pose: bool = False, simulate_head_perception: bool = False, log_dir: str | None = None) -> None:
+        self.node = node
         self.robot_interface = robot_interface
         self._simulate_head_perception = simulate_head_perception
         self.log_dir = log_dir
@@ -42,10 +45,10 @@ class PerceptionInterface:
         else:
             self.simulation = False
             self.tfBuffer = tf2_ros.Buffer()
-            self.listener = tf2_ros.TransformListener(self.tfBuffer)
+            self.listener = tf2_ros.TransformListener(self.tfBuffer, self.node)
 
-            self._head_perception = HeadPerceptionROSWrapper(record_goal_pose)
-            
+            self._head_perception = HeadPerceptionROSWrapper(self.node, record_goal_pose)
+
             # warm start head perception only if we're not recording the goal pose
             if not record_goal_pose:
                 self._head_perception.set_tool("fork")
@@ -54,13 +57,13 @@ class PerceptionInterface:
 
             # Rajat ToDo: pass perception queues to all perception classes instead of having them use ros subscribers which spawn threads
             # self._drink_perception = ArUcoPerception()
-            self._drink_perception = DrinkPerception()
+            self._drink_perception = DrinkPerception(self.node)
 
-            self.speak_pub = rospy.Publisher('/speak', String, queue_size=1)
+            self.speak_pub = self.node.create_publisher(String, '/speak', 1)
 
             self.transfer_button = False
-            self.transfer_button_sub = rospy.Subscriber('/transfer_button', Bool, self.transfer_button_callback)
-            
+            self.transfer_button_sub = self.node.create_subscription(Bool, '/transfer_button', self.transfer_button_callback, 10)
+
         self.head_perception_data_lock = threading.Lock()
         # this term is updated in the run_head_perception method and read in the get_tool_tip_pose method
         self.head_perception_data = None
@@ -76,7 +79,7 @@ class PerceptionInterface:
         self.log_head_perception = False
 
         self.last_drink_poses = None
-        
+
     def speak(self, text):
         print("Speaking: ", text)
         if self.simulation:
@@ -88,12 +91,9 @@ class PerceptionInterface:
         if self.simulation:
             return True
 
-        # input("Press Enter to simulate button press")
-        # return True
-        
         self.transfer_button = False
         # wait for button press
-        while not rospy.is_shutdown() and not self.transfer_button:
+        while rclpy.ok() and not self.transfer_button:
             time.sleep(0.05)
         self.transfer_button = False
         return True
@@ -101,13 +101,25 @@ class PerceptionInterface:
     def transfer_button_callback(self, msg):
         print("Transfer button pressed")
         self.transfer_button = True
-        
+
     def get_robot_joints(self) -> "JointState":
         """Get the current robot joint state."""
-        joint_state_msg = rospy.wait_for_message("/robot_joint_states", JointState)
+        # ROS2 equivalent of rospy.wait_for_message
+        joint_state_msg = None
+        def _cb(msg):
+            nonlocal joint_state_msg
+            joint_state_msg = msg
+        sub = self.node.create_subscription(JointState, "/robot_joint_states", _cb, 1)
+        deadline = time.time() + 10.0
+        while joint_state_msg is None and time.time() < deadline:
+            rclpy.spin_once(self.node, timeout_sec=0.1)
+        self.node.destroy_subscription(sub)
+        if joint_state_msg is None:
+            raise TimeoutError("Did not receive /robot_joint_states within 10s")
+
         q = np.array(joint_state_msg.position[:7])
         gripper_position = joint_state_msg.position[7]
-        
+
         joint_state = q.tolist() + [
             gripper_position,
             gripper_position,
@@ -122,7 +134,7 @@ class PerceptionInterface:
         camera_color_data, camera_info_data, camera_depth_data, _ = self._head_perception.get_camera_data()
         camera_info = CustomCameraInfo(fx=camera_info_data.K[0], fy=camera_info_data.K[4], cx=camera_info_data.K[2], cy=camera_info_data.K[5])
         return camera_color_data, camera_info, camera_depth_data
-    
+
     def set_head_perception_tool(self, tool: str) -> None:
         """Set the tool for head perception."""
         self.tool = tool
@@ -133,7 +145,7 @@ class PerceptionInterface:
         return self.head_perception_running
 
     def start_head_perception_thread(self):
-        assert not self.head_perception_running, "Head perception thread is already running" 
+        assert not self.head_perception_running, "Head perception thread is already running"
 
         # Start head perception thread
         self.kill_the_thread = False
@@ -182,19 +194,13 @@ class PerceptionInterface:
         with self.head_perception_data_lock:
             head_perception_data = self.head_perception_data
 
-        # # Just for testing
-        # benjamin_tool_tip_target_pose = np.eye(4)
-        # benjamin_tool_tip_target_pose[:3, 3] = [-0.282, 0.540, 0.619]
-        # benjamin_tool_tip_target_pose[:3, :3] = R.from_quat([-0.490, 0.510, 0.511, -0.489]).as_matrix()
-        # head_perception_data["tool_tip_target_pose"] = benjamin_tool_tip_target_pose
-
         # save them in a pickle file
         if self.robot_interface is not None and self.log_dir is not None and self._simulate_head_perception == False:
             with open(self.log_dir / f'head_perception_data_{self.tool}.pkl', 'wb') as f:
                 pickle.dump(head_perception_data, f)
-            
+
         return head_perception_data
-        
+
     def get_tool_tip_pose(self) -> np.ndarray:
 
         current_state = self.robot_interface.get_state()
@@ -205,7 +211,7 @@ class PerceptionInterface:
         tool_tip_pose[:3, :3] = R.from_quat(ee_pose[3:]).as_matrix()
 
         return tool_tip_pose
-    
+
     def get_tool_tip_pose_at_staging(self) -> np.ndarray:
 
         tool_tip_staging_pose = np.eye(4)
@@ -221,13 +227,13 @@ class PerceptionInterface:
 
     def getTransformationFromTF(self, source_frame, target_frame):
 
-        while not rospy.is_shutdown():
+        while rclpy.ok():
             try:
                 # print("Looking for transform")
-                transform = self.tfBuffer.lookup_transform(source_frame, target_frame, rospy.Time())
+                transform = self.tfBuffer.lookup_transform(source_frame, target_frame, Time())
                 break
             except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException):
-                self.control_rate.sleep()
+                time.sleep(0.01)
                 continue
 
         T = np.zeros((4,4))
@@ -242,14 +248,14 @@ class PerceptionInterface:
         def get_drink_transform():
             tf = np.zeros((4, 4))
             tf[:3, :3] = R.from_euler("xyz", [0, 0, np.pi / 2]).as_matrix()
-            tf[:3, 3] = np.array([0.0, 0.0, 0.0]) 
+            tf[:3, 3] = np.array([0.0, 0.0, 0.0])
             tf[3, 3] = 1
             return tf
 
         def get_pre_grasp_transform():
             tf = np.zeros((4, 4))
             tf[:3, :3] = R.from_euler("xyz", [np.pi, 0, np.pi / 2]).as_matrix()
-            tf[:3, 3] = np.array([0.02, 0.0, 0.15]) 
+            tf[:3, 3] = np.array([0.02, 0.0, 0.15])
             tf[3, 3] = 1
             return tf
 
@@ -262,23 +268,20 @@ class PerceptionInterface:
             tf = get_inside_bottom_transform()
             tf[0, 3] = 0.05
             return tf
-        
+
         def get_post_grasp_pose():
             tf = get_inside_top_transform()
             tf[0, 3] = 0.233
             return tf
-        
+
         def get_place_inside_bottom_transform():
             tf = get_inside_bottom_transform()
-            # tf[1, 3] = 0.0
             return tf
 
         def get_place_pre_grasp_transform():
             tf = get_pre_grasp_transform()
-            # tf[2, 3] = 0.25
-            # tf[1, 3] = 0.0
             return tf
-                
+
         if self.simulation:
             # load them from a pickle file
             with open(self.log_dir / 'drink_pickup_pos.pkl', 'rb') as f:
@@ -290,8 +293,21 @@ class PerceptionInterface:
             self._drink_perception.turn_on()
             time.sleep(7)
 
-            aruco_pose_msg = rospy.wait_for_message("/aruco_pose_0", PoseMsg)
+            # ROS2 equivalent of rospy.wait_for_message
+            aruco_pose_msg = None
+            def _cb(msg):
+                nonlocal aruco_pose_msg
+                aruco_pose_msg = msg
+            sub = self.node.create_subscription(PoseMsg, "/aruco_pose_0", _cb, 1)
+            deadline = time.time() + 30.0
+            while aruco_pose_msg is None and time.time() < deadline:
+                rclpy.spin_once(self.node, timeout_sec=0.1)
+            self.node.destroy_subscription(sub)
             self._drink_perception.turn_off()
+
+            if aruco_pose_msg is None:
+                raise TimeoutError("Did not receive /aruco_pose_0 within 30s")
+
             position = (aruco_pose_msg.position.x, aruco_pose_msg.position.y, aruco_pose_msg.position.z)
             orientation = (aruco_pose_msg.orientation.x, aruco_pose_msg.orientation.y, aruco_pose_msg.orientation.z, aruco_pose_msg.orientation.w)
             self.aruco_pose = (position, orientation)
@@ -309,11 +325,11 @@ class PerceptionInterface:
         self.sync_rviz()
 
         return drink_poses
-    
+
     def record_drink_pickup_joint_pos(self):
         if self.simulation:
             return
-        
+
         self.drink_pickup_joint_pos = self.get_robot_joints()[:7]
         # save them in a pickle file
         drink_pickup_pos = {
@@ -331,7 +347,7 @@ class PerceptionInterface:
             drink_pickup_joint_pos = self.drink_pickup_joint_pos
         except Exception as e:
             drink_pickup_joint_pos = None
-        
+
         return last_drink_poses, drink_pickup_joint_pos
 
     def get_aruco_relative_pose(self, transform, override_angles = ""):
@@ -347,7 +363,7 @@ class PerceptionInterface:
             _, _, yaw = rot.as_euler("xyz")
             new_rot = R.from_euler("xyz", [roll, pitch, yaw])
             goal_pose = Pose(goal_pose[0], new_rot.as_quat())
-        
+
         return goal_pose
 
     def pose_to_matrix(self, pose):
@@ -358,12 +374,12 @@ class PerceptionInterface:
         pose_matrix[:3, :3] = R.from_quat(orientation).as_matrix()
         pose_matrix[3, 3] = 1
         return pose_matrix
-    
+
     def matrix_to_pose(self, mat):
         position = mat[:3, 3]
         orientation = R.from_matrix(mat[:3, :3]).as_quat()
-        return Pose(position, orientation) 
-    
+        return Pose(position, orientation)
+
     def start_logging_head_perception(self):
         assert self.head_perception_running, "Head perception thread should be running to start logging"
         self.log_head_perception_data = []
@@ -380,7 +396,7 @@ class PerceptionInterface:
         self.log_head_perception_data = []
         self.log_head_perception_start_time = None
         gc.collect()
-    
+
     def extract_from_logged_head_perception_data(self, timestamp):
 
         # add three second to timestamp[0]
@@ -388,7 +404,7 @@ class PerceptionInterface:
         print("data segment true end time: ", timestamp[1])
         start_time = timestamp[0] + 3
         end_time = timestamp[1] - 3
-        
+
         data_segment = {
             "head_pose": [],
             "face_keypoints": [],

@@ -8,12 +8,13 @@ import sys
 import queue
 
 try:
-    import rospy
+    import rclpy
+    from rclpy.node import Node
     from std_msgs.msg import String
 
-    ROSPY_IMPORTED = True
+    RCLPY_IMPORTED = True
 except ModuleNotFoundError:
-    ROSPY_IMPORTED = False
+    RCLPY_IMPORTED = False
 
 from relational_structs import (
     GroundAtom,
@@ -45,18 +46,17 @@ from rammp.actions.flair.food_manipulation_skill_library import FoodManipulation
 
 def test_FoodManipulationSkillLibrary(sim, robot_interface, wrist_interface, perception_interface, rviz_interface, no_waits):
 
-    wrist_interface.set_velocity_mode()    
+    wrist_interface.set_velocity_mode()
     food_manipulation_skill_library = FoodManipulationSkillLibrary(sim, robot_interface, wrist_interface, perception_interface, rviz_interface, no_waits)
 
     for i in range(10):
         food_manipulation_skill_library.reset()
         camera_color_data, camera_info_data, camera_depth_data = perception_interface.get_camera_data()
-        # food_manipulation_skill_library.dipping_skill(camera_color_data, camera_depth_data, camera_info_data)
         food_manipulation_skill_library.skewering_skill(camera_color_data, camera_depth_data, camera_info_data)
 
 def test_TransferToolHLA(tool, sim, robot_interface, perception_interface, rviz_interface, web_interface, hla_hyperparams, wrist_interface, flair, no_waits, log_dir, run_behavior_tree_dir, execution_log, gesture_detectors_dir):
 
-    high_level_action = TransferToolHLA(sim, robot_interface, perception_interface, rviz_interface, web_interface, hla_hyperparams, wrist_interface, flair, no_waits, log_dir, run_behavior_tree_dir, execution_log, gesture_detectors_dir)    
+    high_level_action = TransferToolHLA(sim, robot_interface, perception_interface, rviz_interface, web_interface, hla_hyperparams, wrist_interface, flair, no_waits, log_dir, run_behavior_tree_dir, execution_log, gesture_detectors_dir)
 
     if tool == "fork":
         utensil = Object("utensil", tool_type)
@@ -109,16 +109,18 @@ def test_AcquireBiteHLA(sim, robot_interface, perception_interface, rviz_interfa
         rviz_interface.tool_update(True, sim.held_object_name, Pose((0, 0, 0), (0, 0, 0, 1))) # pickup the tool in rviz
 
     high_level_action.execute_action(objects=[utensil], params={})
-    
+
 def _main(
     scene_config: str, transfer_type: str, run_on_robot: bool, use_interface: bool, simulate_head_perception: bool, use_gui: bool, make_videos: bool, max_motion_planning_time: float = 10, tool: str = "fork", no_waits: bool = False
 ) -> None:
     """Testing components of the system."""
 
-    if ROSPY_IMPORTED:
-        rospy.init_node("test_actions")
+    node = None
+    if RCLPY_IMPORTED:
+        rclpy.init()
+        node = rclpy.create_node("test_actions")
     else:
-        assert not args.run_on_robot, "Need ROS to run on robot"
+        assert not run_on_robot, "Need ROS to run on robot"
 
     # logs are saved in user/scenario directory
     log_dir = Path(__file__).parent / "log" / "transfer_calibration"
@@ -129,7 +131,7 @@ def _main(
     execution_log = Path(__file__).parent / "log" / "execution_log.txt" # in root log directory
     run_behavior_tree_dir = log_dir / "behavior_trees"
     gesture_detectors_dir = log_dir / "gesture_detectors"
-            
+
     # Copy the initial behavior trees into a directory for this run, where
     # they will be modified based on user feedback.
     run_behavior_tree_dir.mkdir(exist_ok=True)
@@ -147,7 +149,7 @@ def _main(
 
     # Initialize the interface to the robot.
     if run_on_robot:
-        robot_interface = ArmInterfaceClient()  # type: ignore  # pylint: disable=no-member
+        robot_interface = ArmInterfaceClient(node=node)  # type: ignore  # pylint: disable=no-member
         wrist_interface = WristInterface()
     else:
         robot_interface = None
@@ -157,12 +159,12 @@ def _main(
 
     if use_interface:
         task_selection_queue = queue.Queue()
-        web_interface = WebInterface(task_selection_queue=task_selection_queue, log_dir=log_dir)
+        web_interface = WebInterface(node=node, task_selection_queue=task_selection_queue, log_dir=log_dir)
     else:
         web_interface = None
 
     # Initialize the perceiver (e.g., get joint states or human head poses).
-    perception_interface = PerceptionInterface(robot_interface=robot_interface, simulate_head_perception=simulate_head_perception, log_dir=log_dir)
+    perception_interface = PerceptionInterface(node=node, robot_interface=robot_interface, simulate_head_perception=simulate_head_perception, log_dir=log_dir)
 
     scene_config_path = Path(__file__).parent.parent / "simulation" / "configs" / f"{scene_config}.yaml"
     scene_description = create_scene_description_from_config(str(scene_config_path), transfer_type)
@@ -170,27 +172,18 @@ def _main(
 
     if robot_interface is not None:
         # Initialize the interface to RViz.
-        rviz_interface = RVizInterface(scene_description)
+        rviz_interface = RVizInterface(node, scene_description)
     else:
         rviz_interface = None
 
     # Create skills for high-level planning.
     hla_hyperparams = {"max_motion_planning_time": max_motion_planning_time}
 
-    # # Copy the initial behavior trees into a directory for this run, where
-    # # they will be modified based on user feedback.
-    # run_behavior_tree_dir = Path(__file__).parent / "log" / "test_actions" / "behavior_trees"
-    # run_behavior_tree_dir.mkdir(exist_ok=True)
-    # original_behavior_tree_dir = Path(__file__).parents[1] / "actions" / "behavior_trees"
-    # assert original_behavior_tree_dir.exists()
-    # for original_bt_filename in original_behavior_tree_dir.glob("*.yaml"):
-    #     shutil.copy(original_bt_filename, run_behavior_tree_dir)
-
     test_FoodManipulationSkillLibrary(sim, robot_interface, wrist_interface, perception_interface, rviz_interface, no_waits)
-    
-    # test_AcquireBiteHLA(sim, robot_interface, perception_interface, rviz_interface, web_interface, hla_hyperparams, wrist_interface, flair, no_waits, log_dir, run_behavior_tree_dir, execution_log, gesture_detectors_dir)
-    # for i in range(25):
-        # test_TransferToolHLA(tool, sim, robot_interface, perception_interface, rviz_interface, web_interface, hla_hyperparams, wrist_interface, flair, no_waits, log_dir, run_behavior_tree_dir, execution_log, gesture_detectors_dir)
+
+    if node is not None:
+        node.destroy_node()
+        rclpy.shutdown()
 
 if __name__ == "__main__":
     import argparse

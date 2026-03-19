@@ -9,15 +9,15 @@ import time
 import numpy as np
 
 try:
-    import rospy
+    import rclpy
+    from rclpy.node import Node
     from sensor_msgs.msg import JointState
     from std_msgs.msg import Bool
     from geometry_msgs.msg import Pose
-    # from netft_rdt_driver.srv import String_cmd
-    ROSPY_IMPORTED = True
+    RCLPY_IMPORTED = True
 except ModuleNotFoundError as e:
     # print(f"ROS not imported: {e}")
-    ROSPY_IMPORTED = False
+    RCLPY_IMPORTED = False
 
 from rammp.control.robot_controller.arm_interface import ArmInterface, ArmManager, NUC_HOSTNAME, ARM_RPC_PORT, RPC_AUTHKEY
 from rammp.control.robot_controller.command_interface import KinovaCommand, JointTrajectoryCommand, JointCommand, CartesianCommand, OpenGripperCommand, CloseGripperCommand
@@ -26,13 +26,26 @@ from rammp.control.robot_controller.command_interface import KinovaCommand, Join
 from rammp.control.robot_controller.maintain_home_orientation import MaintainHomeOrientation
 
 class ArmInterfaceClient:
-    def __init__(self):
+    def __init__(self, node: "Node" = None):
 
-        assert ROSPY_IMPORTED, "ROS is required to run on the real robot"
+        assert RCLPY_IMPORTED, "ROS is required to run on the real robot"
+
+        self._node = node
 
         # make sure watchdog is running
         print("Waiting for Watchdog status...")
-        rospy.wait_for_message("/watchdog_status", Bool)
+        if self._node is not None:
+            # Wait for a message on /watchdog_status
+            self._watchdog_received = False
+            self._watchdog_sub = self._node.create_subscription(
+                Bool, "/watchdog_status", self._watchdog_callback, 10
+            )
+            deadline = time.time() + 30.0
+            while not self._watchdog_received and time.time() < deadline:
+                rclpy.spin_once(self._node, timeout_sec=0.1)
+            self._node.destroy_subscription(self._watchdog_sub)
+            if not self._watchdog_received:
+                raise TimeoutError("Watchdog status not received within 30s")
         print("Watchdog is running, continuing...")
 
         # Register ArmInterface (no lambda needed on the client-side)
@@ -47,6 +60,9 @@ class ArmInterfaceClient:
 
         self.maintain_home_orientation = MaintainHomeOrientation(self._arm_interface)
 
+    def _watchdog_callback(self, msg):
+        self._watchdog_received = True
+
     def start_maintain_home_orientation(self):
         self.maintain_home_orientation.start()
 
@@ -55,10 +71,10 @@ class ArmInterfaceClient:
 
     def get_state(self):
         return self._arm_interface.get_state()
-    
+
     def get_speed(self):
         return self._arm_interface.get_speed()
-    
+
     def set_speed(self, speed: str):
         assert speed in ["low", "medium", "high"], "Speed must be one of 'low', 'medium', 'high'"
         self._arm_interface.set_speed(speed)
@@ -91,17 +107,17 @@ class ArmInterfaceClient:
 
 if __name__ == "__main__":
 
-    rospy.init_node("arm_interface_client", anonymous=True)
-    arm_client_interface = ArmInterfaceClient()
+    rclpy.init()
+    node = rclpy.create_node("arm_interface_client")
+    arm_client_interface = ArmInterfaceClient(node=node)
     print("Current State:", arm_client_interface.get_state())
 
     run_commands = input("Press 'y' to run commands")
 
     if run_commands != "y":
+        node.destroy_node()
+        rclpy.shutdown()
         exit()
-
-    # inside_handle_pose = [-0.31010666489601135, -0.018085628747940063, 0.1462610810995102, 0.02322167404813943, 0.7180926934794382, 0.6955542280407613, 0.0028201561070785135]
-    # arm_client_interface.execute_command(CartesianCommand(pos=inside_handle_pose[:3], quat=inside_handle_pose[3:]))
 
     above_inside_handle_pose = [-0.31010666489601135, -0.018085628747940063, 0.1062610810995102, 0.02322167404813943, 0.7180926934794382, 0.6955542280407613, 0.0028201561070785135]
     arm_client_interface.execute_command(CartesianCommand(pos=above_inside_handle_pose[:3], quat=above_inside_handle_pose[3:]))
@@ -109,21 +125,5 @@ if __name__ == "__main__":
     outside_handle_pose = [-0.31010666489601135, -0.118085628747940063, 0.1062610810995102, 0.02322167404813943, 0.7180926934794382, 0.6955542280407613, 0.0028201561070785135]
     arm_client_interface.execute_command(CartesianCommand(pos=outside_handle_pose[:3], quat=outside_handle_pose[3:]))
 
-    # arm_client_interface.start_maintain_home_orientation()
-    # input("Press enter to stop maintaining home orientation...")
-    # arm_client_interface.stop_maintain_home_orientation()
-
-    # retract_pos = [0.0, -0.34903602299465675, -3.141591055693139, -2.0, 0.0, -0.872688061814757, 1.57075917569769]
-    # arm_client_interface.execute_command(JointCommand(retract_pos))
-
-    # home_pos = [0.0, 0.26191187306569164, -3.1415742777782714, -2.269018308753582, -1.1185276577840852e-05, 0.9598948696060562, 1.5707649014940337]
-    # arm_client_interface.execute_command(JointCommand(home_pos))
-
-    # # midpoint_pos = [2.2912525080624357, 0.730991513381838, 2.0830126187361424, -2.1737367965371632, 0.28532185799581516, -0.4648462461578422, -0.29495787389950756]
-    # # arm_client_interface.execute_command(JointCommand(midpoint_pos))
-
-    # before_transfer_pos = [-2.86554642, -1.61951779, -2.60986085, -1.37302839, 1.11779249, -1.18028264, 2.05515862]
-    # arm_client_interface.execute_command(JointCommand(before_transfer_pos))
-
-    # # drink_gaze_pos = [-0.004187021865822871, 0.6034579885210962, -3.1259047705564633, -2.3538005746884725, 0.01149092320739253, 1.3411586039000891, 1.6825233913747728]
-    # # arm_client_interface.execute_command(JointCommand(drink_gaze_pos))
+    node.destroy_node()
+    rclpy.shutdown()

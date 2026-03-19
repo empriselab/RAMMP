@@ -3,29 +3,32 @@ import numpy as np
 from scipy.spatial.transform import Rotation
 
 try:
-    import rospy
+    import rclpy
+    from rclpy.node import Node
+    from rclpy.time import Time
     import tf2_ros
     from geometry_msgs.msg import Pose, PoseStamped
     from geometry_msgs.msg import Pose, TransformStamped
-    ROSPY_IMPORTED = True
+    RCLPY_IMPORTED = True
 except ModuleNotFoundError as e:
     # print(f"ROS not imported: {e}")
-    ROSPY_IMPORTED = False
+    RCLPY_IMPORTED = False
 
 
 class TFUtils:
-    def __init__(self):
+    def __init__(self, node: "Node"):
+        self.node = node
         self.tfBuffer = tf2_ros.Buffer() # Using default cache time of 10 secs
-        self.listener = tf2_ros.TransformListener(self.tfBuffer)
-        self.broadcaster = tf2_ros.TransformBroadcaster()
-        self.control_rate = rospy.Rate(100)
-    
+        self.listener = tf2_ros.TransformListener(self.tfBuffer, self.node)
+        self.broadcaster = tf2_ros.TransformBroadcaster(self.node)
+        self.control_rate = self.node.create_rate(100)
+
     def getTransformationFromTF(self, source_frame, target_frame):
 
-        while not rospy.is_shutdown():
+        while rclpy.ok():
             try:
                 # print(f"Looking for transform from {source_frame} to {target_frame} using tfBuffer.lookup_transform...")
-                transform = self.tfBuffer.lookup_transform(source_frame, target_frame, rospy.Time())
+                transform = self.tfBuffer.lookup_transform(source_frame, target_frame, Time())
                 # print("Got transform!")
                 break
             except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException):
@@ -42,12 +45,12 @@ class TFUtils:
         # print("Rotation in euler: ", Rotation.from_quat([transform.transform.rotation.x, transform.transform.rotation.y, transform.transform.rotation.z, transform.transform.rotation.w]).as_euler('xyz', degrees=True))
 
         return T
-    
+
     def publishTransformationToTF(self, source_frame, target_frame, transform):
 
         t = TransformStamped()
 
-        t.header.stamp = rospy.Time.now()
+        t.header.stamp = self.node.get_clock().now().to_msg()
         t.header.frame_id = source_frame
         t.child_frame_id = target_frame
 

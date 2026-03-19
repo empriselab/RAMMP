@@ -30,6 +30,8 @@ cleanup() {
 # Trap Ctrl+C and call cleanup
 trap cleanup SIGINT
 
+# ROS2 does not require a master node
+
 # Start joint states publisher
 cd "$CONTROL_DIR"
 python joint_states_publisher.py &
@@ -55,7 +57,7 @@ collision_sensor_pid=$!  # Store the PID of collision_sensor
 sleep 2
 
 # Run watchdog
-python watchdog.py 
+python watchdog.py
 
 cleanup  # Ensure cleanup is called when bulldog finishes
 wait $joint_states_publisher_pid

@@ -1,5 +1,5 @@
 '''
-Runs a client-side (run on compute machine) watchdog for the robot's intended functionality. 
+Runs a client-side (run on compute machine) watchdog for the robot's intended functionality.
 It validates the following:
 1. All sensors are streaming correctly.
 2. All sensor outputs are within the expected range.
@@ -8,7 +8,8 @@ It validates the following:
 If any of the above is not true, the watchdog will return the corresponding AnomalyStatus.
 '''
 
-import rospy
+import rclpy
+from rclpy.node import Node
 import numpy as np
 import time
 from enum import Enum
@@ -25,9 +26,6 @@ import time
 import numpy as np
 from pathlib import Path
 
-import rospy
-from std_msgs.msg import Bool
-
 from rammp.control.robot_controller.arm_interface import ArmInterface, ArmManager, NUC_HOSTNAME, ARM_RPC_PORT, RPC_AUTHKEY
 
 CAMERA_FREQUENCY_THRESHOLD = 10 # expected is 30 Hz
@@ -37,8 +35,9 @@ WATCHDOG_RUN_FREQUENCY = 1000
 
 from rammp.safety.utils import PeekableQueue, AnomalyStatus
 
-class WatchDog:
+class WatchDog(Node):
     def __init__(self):
+        super().__init__('WatchDog')
 
         # Register ArmInterface (no lambda needed on the client-side)
         ArmManager.register("ArmInterface")
@@ -51,25 +50,25 @@ class WatchDog:
         self._arm_interface = self.manager.ArmInterface()
 
         queue_size = 1000
-        self.camera_info_sub = rospy.Subscriber("/camera/color/camera_info", CameraInfo, self.cameraCallback, queue_size = queue_size, buff_size = 65536*queue_size)
+        self.camera_info_sub = self.create_subscription(CameraInfo, "/camera/color/camera_info", self.cameraCallback, queue_size)
         self.camera_timestamps = PeekableQueue()
 
-        self.camera_unexpected_sub = rospy.Subscriber("/head_perception/unexpected", Bool, self.cameraUnexpectedCallback, queue_size = queue_size, buff_size = 65536*queue_size)
-        self.camera_unexpected = False 
-        
-        self.collision_free_sub = rospy.Subscriber('/collision_free', Bool, self.collisionFreeCallback, queue_size = queue_size, buff_size = 65536*queue_size)
+        self.camera_unexpected_sub = self.create_subscription(Bool, "/head_perception/unexpected", self.cameraUnexpectedCallback, queue_size)
+        self.camera_unexpected = False
+
+        self.collision_free_sub = self.create_subscription(Bool, '/collision_free', self.collisionFreeCallback, queue_size)
         self.collision_free_timestamps = PeekableQueue()
         self.collision_free_unexpected = False
 
-        self.watchdog_status_pub = rospy.Publisher("/watchdog_status", Bool, queue_size=1)
+        self.watchdog_status_pub = self.create_publisher(Bool, "/watchdog_status", 1)
 
         self.execution_log_path = Path(__file__).parent.parent / "integration" / "log" / "execution_log.txt"
 
-        self.disable_collision_sensor_pub = rospy.Publisher("/disable_collision_sensor", Bool, queue_size=1)
+        self.disable_collision_sensor_pub = self.create_publisher(Bool, "/disable_collision_sensor", 1)
 
         self.second_counter = 0
         time.sleep(5.0) # Wait for all queues to fill up / collision monitor to start
-        
+
         # make sure collision is enabled
         self.disable_collision_sensor_pub.publish(Bool(data=False))
         print("Initialized.")
@@ -92,16 +91,16 @@ class WatchDog:
         anomaly = AnomalyStatus.NO_ANOMALY
         start_time = time.time()
         frequencies = []
-        for _queue, _threshold, _anomaly in [(self.camera_timestamps, CAMERA_FREQUENCY_THRESHOLD, AnomalyStatus.CAMERA_FREQUENCY), 
+        for _queue, _threshold, _anomaly in [(self.camera_timestamps, CAMERA_FREQUENCY_THRESHOLD, AnomalyStatus.CAMERA_FREQUENCY),
                                             (self.collision_free_timestamps, COLLISION_FREE_FREQUENCY_THRESHOLD, AnomalyStatus.COLLISION_FREE_FREQUENCY)]:
             while _queue.peek() < start_time - 1.0:
                 _queue.get()
             queue_size = _queue.qsize()
             if queue_size < _threshold:
                 print(f"Frequency: {queue_size} for {_anomaly}")
-                rospy.loginfo(f"Frequency: {queue_size} for {_anomaly}")
+                self.get_logger().info(f"Frequency: {queue_size} for {_anomaly}")
                 anomaly = _anomaly
-                break   
+                break
             frequencies.append(queue_size)
 
         if self.second_counter == WATCHDOG_RUN_FREQUENCY:
@@ -114,22 +113,23 @@ class WatchDog:
                                     (self.collision_free_unexpected, AnomalyStatus.COLLISION_FREE_UNEXPECTED)]:
             if _unexpected:
                 print(f"Unexpected: {_anomaly}")
-                rospy.loginfo(f"Unexpected: {_anomaly}")
+                self.get_logger().info(f"Unexpected: {_anomaly}")
                 anomaly = _anomaly
                 break
 
         if anomaly != AnomalyStatus.NO_ANOMALY:
             self._arm_interface.emergency_stop()
             print(f"AnomalyStatus detected: {anomaly}")
-            rospy.loginfo(f"AnomalyStatus detected: {anomaly}")
+            self.get_logger().info(f"AnomalyStatus detected: {anomaly}")
             with open(self.execution_log_path, 'a') as f:
-                f.write(f"Anomaly Detected: {AnomalyStatus.get_error_message(anomaly)}\n") 
+                f.write(f"Anomaly Detected: {AnomalyStatus.get_error_message(anomaly)}\n")
 
         self.watchdog_status_pub.publish(Bool(data=anomaly == AnomalyStatus.NO_ANOMALY))
         return anomaly
-    
+
     def run(self):
-        while not rospy.is_shutdown():
+        while rclpy.ok():
+            rclpy.spin_once(self, timeout_sec=0)
             start_time = time.time()
             status = self.check_status()
             if status != AnomalyStatus.NO_ANOMALY:
@@ -140,8 +140,8 @@ class WatchDog:
 
 if __name__ == '__main__':
 
-    rospy.init_node('WatchDog', anonymous=True)
-    
+    rclpy.init()
     watchdog = WatchDog()
     watchdog.run()
-    
+    watchdog.destroy_node()
+    rclpy.shutdown()

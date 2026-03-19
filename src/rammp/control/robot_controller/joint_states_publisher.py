@@ -6,14 +6,16 @@ import threading
 import time
 import numpy as np
 
-import rospy
+import rclpy
+from rclpy.node import Node
 from sensor_msgs.msg import JointState
 from geometry_msgs.msg import Pose
 
 from rammp.control.robot_controller.arm_interface import ArmInterface, ArmManager, NUC_HOSTNAME, ARM_RPC_PORT, RPC_AUTHKEY
 
-class JointStatesPublisher:
+class JointStatesPublisher(Node):
     def __init__(self):
+        super().__init__('joint_states_publisher')
 
         # Register ArmInterface (no lambda needed on the client-side)
         ArmManager.register("ArmInterface")
@@ -26,8 +28,8 @@ class JointStatesPublisher:
         self._arm_interface = self.manager.ArmInterface()
 
         # create joint/cartesian states publishers
-        self.joint_states_pub = rospy.Publisher("/robot_joint_states", JointState, queue_size=10)
-        self.cartesian_states_pub = rospy.Publisher("/robot_cartesian_state", Pose, queue_size=10)
+        self.joint_states_pub = self.create_publisher(JointState, "/robot_joint_states", 10)
+        self.cartesian_states_pub = self.create_publisher(Pose, "/robot_cartesian_state", 10)
 
     def publish_joint_states(self):
 
@@ -35,9 +37,9 @@ class JointStatesPublisher:
             current_state = self._arm_interface.get_state()
         except Exception as e:
             raise Exception(f"Error getting state: {e}")
-        
+
         joint_state_msg = JointState()
-        joint_state_msg.header.stamp = rospy.Time.now()
+        joint_state_msg.header.stamp = self.get_clock().now().to_msg()
         joint_state_msg.name = [
             "joint_1",
             "joint_2",
@@ -67,14 +69,16 @@ class JointStatesPublisher:
         cartesian_state_msg.orientation.y = ee_pose[4]
         cartesian_state_msg.orientation.z = ee_pose[5]
         cartesian_state_msg.orientation.w = ee_pose[6]
-        self.cartesian_states_pub.publish(cartesian_state_msg) 
+        self.cartesian_states_pub.publish(cartesian_state_msg)
 
     def run(self):
-        while not rospy.is_shutdown():
+        while rclpy.ok():
             self.publish_joint_states()
 
 if __name__ == "__main__":
 
-    rospy.init_node("joint_states_publisher", anonymous=True)
+    rclpy.init()
     joint_states_publisher = JointStatesPublisher()
     joint_states_publisher.run()
+    joint_states_publisher.destroy_node()
+    rclpy.shutdown()

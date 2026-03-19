@@ -84,6 +84,7 @@ class HighLevelAction(abc.ABC):
         log_dir: Path,
         behavior_tree_dir: Path,
         behavior_tree_execution_log: Path,
+        system_control_client: Any = None,
     ) -> None:
         self.sim = sim
         self.robot_interface = robot_interface
@@ -95,6 +96,8 @@ class HighLevelAction(abc.ABC):
         self.log_dir = log_dir
         self.behavior_tree_dir = behavior_tree_dir
         self.behavior_tree_execution_log = behavior_tree_execution_log
+        # Optional client for the Demo-Software SystemControl ROS2 node.
+        self.system_control_client = system_control_client
         # NOTE: assuming 7-dof and that first 7 entries are arm joints (not gripper).
         self.arm_joint_lower_limits = self.sim.robot.joint_lower_limits[:7]
         self.arm_joint_upper_limits = self.sim.robot.joint_upper_limits[:7]

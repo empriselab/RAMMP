@@ -12,12 +12,20 @@ from tomsutils.llm import OpenAILLM
 import time
 
 try:
-    import rospy
+    import rclpy
+    from rclpy.node import Node
     from std_msgs.msg import String
 
-    ROSPY_IMPORTED = True
+    RCLPY_IMPORTED = True
 except ModuleNotFoundError:
-    ROSPY_IMPORTED = False
+    RCLPY_IMPORTED = False
+
+try:
+    from rammp.control.system_control_client import SystemControlClient
+
+    SYSTEM_CONTROL_AVAILABLE = True
+except (ModuleNotFoundError, ImportError):
+    SYSTEM_CONTROL_AVAILABLE = False
 
 from relational_structs import (
     GroundAtom,
@@ -75,10 +83,11 @@ assert os.environ.get("PYTHONHASHSEED") == "0", \
 class _Runner:
     """A class for running the integrated system."""
 
-    def __init__(self, scene_config: str, user: str, scenario:str, run_on_robot: bool, use_interface: bool, use_gui: bool, simulate_head_perception: bool, max_motion_planning_time: float,
+    def __init__(self, node: "Node", scene_config: str, user: str, scenario:str, run_on_robot: bool, use_interface: bool, use_gui: bool, simulate_head_perception: bool, max_motion_planning_time: float,
                  resume_from_state: str = "", no_waits: bool = False) -> None:
+        self.node = node
         self.run_on_robot = run_on_robot
-        self.use_interface = use_interface  
+        self.use_interface = use_interface
         self.simulate_head_perception = simulate_head_perception
         self.max_motion_planning_time = max_motion_planning_time
         self.no_waits = no_waits
@@ -87,12 +96,12 @@ class _Runner:
         self.log_dir = Path(__file__).parent / "log" / user / scenario
         self.execution_log = Path(__file__).parent / "log" / "execution_log.txt" # in root log directory
         self.run_behavior_tree_dir = self.log_dir / "behavior_trees"
-        
+
         if not self.log_dir.exists():
             if not (self.log_dir.parent).exists(): # new user
                 assert scenario == "default", "First run with a new user must be in default scenario."
                 os.makedirs(self.log_dir, exist_ok=True)
-                
+
                 # Copy the initial behavior trees into a directory for this run, where
                 # they will be modified based on user feedback.
                 self.run_behavior_tree_dir.mkdir(exist_ok=True)
@@ -124,7 +133,7 @@ class _Runner:
 
         # Initialize the interface to the robot.
         if run_on_robot:
-            self.robot_interface = ArmInterfaceClient()  # type: ignore  # pylint: disable=no-member
+            self.robot_interface = ArmInterfaceClient(node=self.node)  # type: ignore  # pylint: disable=no-member
         else:
             self.robot_interface = None
 
@@ -134,7 +143,7 @@ class _Runner:
         )
 
         # Initialize the perceiver (e.g., get joint states or human head poses).
-        self.perception_interface = PerceptionInterface(robot_interface=self.robot_interface, simulate_head_perception=self.simulate_head_perception, log_dir=self.log_dir)
+        self.perception_interface = PerceptionInterface(node=self.node, robot_interface=self.robot_interface, simulate_head_perception=self.simulate_head_perception, log_dir=self.log_dir)
 
         # Initialize the simulator.
         scene_config_path = Path(__file__).parent.parent / "simulation" / "configs" / f"{scene_config}.yaml"
@@ -145,12 +154,12 @@ class _Runner:
                 print("Initial joint state in scene description does not match the actual robot joint state.")
                 print("Initial Robot Joints:", self.perception_interface.get_robot_joints())
                 print("Initial Joints in Scene Description:", self.scene_description.initial_joints)
-                
+
         else:
             print("Running in simulation mode.")
 
         if self.run_on_robot:
-            self.rviz_interface = RVizInterface(self.scene_description)
+            self.rviz_interface = RVizInterface(self.node, self.scene_description)
         else:
             self.rviz_interface = None
 
@@ -159,16 +168,27 @@ class _Runner:
         if self.use_interface:
             # Initialize the web interface.
             self.task_selection_queue = queue.Queue()
-            self.web_interface = WebInterface(self.task_selection_queue, self.log_dir)
+            self.web_interface = WebInterface(self.node, self.task_selection_queue, self.log_dir)
         else:
             self.web_interface = None
+
+        # Optionally connect to the Demo-Software SystemControl ROS2 node.
+        self.system_control_client = None
+        if run_on_robot and SYSTEM_CONTROL_AVAILABLE:
+            try:
+                self.system_control_client = SystemControlClient()
+                print("SystemControlClient connected to Demo-Software SystemControl node.")
+            except Exception as e:
+                print(f"Warning: could not connect to SystemControl node: {e}")
 
         # Create skills for high-level planning.
         hla_hyperparams = {"max_motion_planning_time": max_motion_planning_time}
         print("Creating HLAs...")
         self.hlas = {
-            cls(self.sim, self.robot_interface, self.perception_interface, self.rviz_interface, self.web_interface, hla_hyperparams,
-                self.no_waits, self.log_dir, self.run_behavior_tree_dir, self.execution_log) for cls in HLAS  # type: ignore
+            cls(self.sim, self.robot_interface, self.perception_interface, self.rviz_interface,
+                self.web_interface, hla_hyperparams, self.no_waits, self.log_dir,
+                self.run_behavior_tree_dir, self.execution_log,
+                system_control_client=self.system_control_client) for cls in HLAS  # type: ignore
         }
         print("HLAs created.")
         self.hla_name_to_hla = {hla.get_name(): hla for hla in self.hlas}
@@ -227,7 +247,7 @@ class _Runner:
     def run(self) -> None:
 
         assert self.web_interface is not None, "Run takes user commands from the web interface which is None."
-        
+
         self.web_interface.ready_for_task_selection()
         last_task_type = None
         while self.active:
@@ -247,20 +267,20 @@ class _Runner:
                 else:
                     print(f"Invalid task selection: {task_selection_command}")
                     last_task_type = None
-                # self.web_interface.clear_received_messages() # So that only the latest message is processed
-                # time.sleep(1.0)
                 self.web_interface.ready_for_task_selection(last_task_type=last_task_type)
                 print("Ready for next user command.")
                 print("Current web interface page:", self.web_interface.current_page)
             except queue.Empty:
                 # Wait for user commands.
-                time.sleep(0.1) 
+                time.sleep(0.1)
                 continue
 
     def stop_all_threads(self) -> None:
         self.active = False
         if self.web_interface is not None:
             self.web_interface.stop_all_threads()
+        if self.system_control_client is not None:
+            self.system_control_client.shutdown()
 
     def signal_handler(self, signal, frame):
         print("\nReceived SIGINT.")
@@ -304,7 +324,6 @@ class _Runner:
             print(f"Refining {ground_hla}")
             operator = ground_hla.get_operator()
 
-            # import ipdb; ipdb.set_trace()
             assert operator.preconditions.issubset(self.current_atoms)
 
             # Execute the high-level plan in simulation
@@ -342,7 +361,7 @@ class _Runner:
                 self.rviz_interface.joint_state_update(sim_state.robot_joints)
                 if sim_state.held_object:
                     self.rviz_interface.tool_update(True, sim_state.held_object, Pose((0, 0, 0), (0, 0, 0, 1)))
-                
+
         print(f"Loaded system state from {self._saved_state_infile}")
 
 
@@ -366,36 +385,32 @@ if __name__ == "__main__":
     if args.user == "":
         raise ValueError("Please provide a user name.")
 
+    node = None
     if args.run_on_robot or args.use_interface:
-        if not ROSPY_IMPORTED:
+        if not RCLPY_IMPORTED:
             raise ModuleNotFoundError("Need ROS to run on robot or use interface")
         else:
-            rospy.init_node("rammp", anonymous=True)
+            rclpy.init()
+            node = rclpy.create_node("rammp")
 
-    runner = _Runner(args.scene_config,
+    runner = _Runner(node,
+                     args.scene_config,
                      args.user,
                      args.scenario,
-                     args.run_on_robot, 
+                     args.run_on_robot,
                      args.use_interface,
                      args.use_gui,
                      args.simulate_head_perception,
                      args.max_motion_planning_time,
                      args.resume_from_state,
                      args.no_waits)
-    
+
     # Handle Ctrl+C gracefully
     signal.signal(signal.SIGINT, runner.signal_handler)
-    
+
     if not args.use_interface:
-        # runner.process_user_command(GroundHighLevelAction(runner.hla_name_to_hla["PickTool"], (runner.drink,), params={"drink_location": "wheelchair_handle"}))
-        # runner.process_user_command(GroundHighLevelAction(runner.hla_name_to_hla["StowTool"], (runner.drink,), params={"drink_location": "handover"}))
         runner.process_user_command(GroundHighLevelAction(runner.hla_name_to_hla["TransferTool"], (runner.drink,)))
         runner.process_user_command(GroundHighLevelAction(runner.hla_name_to_hla["StowTool"], (runner.drink,), params={"drink_location": "wheelchair_handle"}))
-
-        # runner.process_user_command(GroundHighLevelAction(runner.hla_name_to_hla["TransferTool"], (runner.drink,)))
-        # for i in range(10):
-            # runner.process_user_command(GroundHighLevelAction(runner.hla_name_to_hla["PickTool"], (runner.drink,)))
-            # runner.process_user_command(GroundHighLevelAction(runner.hla_name_to_hla["StowTool"], (runner.drink,)))
     else:
         runner.run()
 
@@ -403,5 +418,7 @@ if __name__ == "__main__":
         output_path = Path(__file__).parent / "videos" / "full.mp4"
         runner.make_video(output_path)
 
-    if args.run_on_robot:
-        rospy.spin()
+    if args.run_on_robot and node is not None:
+        rclpy.spin(node)
+        node.destroy_node()
+        rclpy.shutdown()

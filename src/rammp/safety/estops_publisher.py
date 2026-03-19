@@ -3,23 +3,25 @@ import time
 import argparse
 import pyaudio
 
-import rospy
+import rclpy
+from rclpy.node import Node
 from std_msgs.msg import Bool
 
 from rammp.safety.button import Button as EStop
 ESTOP_FREQUENCY = 100
 
-class EStopsPublisher:
+class EStopsPublisher(Node):
     def __init__(self, user_estop_id: int, experimentor_estop_id: int):
+        super().__init__('estop_publisher')
 
         self.user_estop = EStop(user_estop_id)
         self.experimentor_estop = EStop(experimentor_estop_id)
 
-        self.user_estop_pub = rospy.Publisher("/user_estop", Bool, queue_size=1)
-        self.experimentor_estop_pub = rospy.Publisher("/experimentor_estop", Bool, queue_size=1)
+        self.user_estop_pub = self.create_publisher(Bool, "/user_estop", 1)
+        self.experimentor_estop_pub = self.create_publisher(Bool, "/experimentor_estop", 1)
 
     def run(self):
-        while not rospy.is_shutdown():
+        while rclpy.ok():
             start_time = time.time()
             user_estop_pressed = self.user_estop.check()
             experimentor_estop_pressed = self.experimentor_estop.check()
@@ -29,7 +31,7 @@ class EStopsPublisher:
 
             if user_estop_pressed:
                 print("User E-Stop pressed")
-                
+
             if experimentor_estop_pressed:
                 print("Experimentor E-Stop pressed")
 
@@ -52,7 +54,9 @@ if __name__ == "__main__":
                 device_indices.append(i)
                 print(f"Device {i}: {device_info['name']}")
         raise ValueError("Please provide the input device index")
-    
-    rospy.init_node("estop_publisher")
+
+    rclpy.init()
     estop_publisher = EStopsPublisher(user_estop_id=args.user_id, experimentor_estop_id=args.exp_id)
     estop_publisher.run()
+    estop_publisher.destroy_node()
+    rclpy.shutdown()
