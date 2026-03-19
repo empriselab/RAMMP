@@ -20,13 +20,6 @@ try:
 except ModuleNotFoundError:
     RCLPY_IMPORTED = False
 
-try:
-    from rammp.control.system_control_client import SystemControlClient
-
-    SYSTEM_CONTROL_AVAILABLE = True
-except (ModuleNotFoundError, ImportError):
-    SYSTEM_CONTROL_AVAILABLE = False
-
 from relational_structs import (
     GroundAtom,
     LiftedAtom,
@@ -172,23 +165,13 @@ class _Runner:
         else:
             self.web_interface = None
 
-        # Optionally connect to the Demo-Software SystemControl ROS2 node.
-        self.system_control_client = None
-        if run_on_robot and SYSTEM_CONTROL_AVAILABLE:
-            try:
-                self.system_control_client = SystemControlClient()
-                print("SystemControlClient connected to Demo-Software SystemControl node.")
-            except Exception as e:
-                print(f"Warning: could not connect to SystemControl node: {e}")
-
         # Create skills for high-level planning.
         hla_hyperparams = {"max_motion_planning_time": max_motion_planning_time}
         print("Creating HLAs...")
         self.hlas = {
             cls(self.sim, self.robot_interface, self.perception_interface, self.rviz_interface,
                 self.web_interface, hla_hyperparams, self.no_waits, self.log_dir,
-                self.run_behavior_tree_dir, self.execution_log,
-                system_control_client=self.system_control_client) for cls in HLAS  # type: ignore
+                self.run_behavior_tree_dir, self.execution_log) for cls in HLAS  # type: ignore
         }
         print("HLAs created.")
         self.hla_name_to_hla = {hla.get_name(): hla for hla in self.hlas}
@@ -279,8 +262,6 @@ class _Runner:
         self.active = False
         if self.web_interface is not None:
             self.web_interface.stop_all_threads()
-        if self.system_control_client is not None:
-            self.system_control_client.shutdown()
 
     def signal_handler(self, signal, frame):
         print("\nReceived SIGINT.")

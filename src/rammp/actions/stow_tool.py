@@ -57,12 +57,6 @@ class StowToolHLA(HighLevelAction):
         if self.robot_interface is not None:
             self.robot_interface.stop_maintain_home_orientation()
 
-        # If the SystemControl node is available, delegate to it for state
-        # tracking and arm preset movements.
-        if self.system_control_client is not None:
-            self.system_control_client.stow_drink()
-            return
-
         if self.drink_location == "table":
             self.stow_drink_on_table()
         elif self.drink_location == "wheelchair_handle":

@@ -63,12 +63,6 @@ class PickToolHLA(HighLevelAction):
         if self.robot_interface is not None:
             self.robot_interface.set_speed(speed)
 
-        # If the SystemControl node is available, delegate to it for state
-        # tracking and arm preset movements; then run perception-dependent steps.
-        if self.system_control_client is not None:
-            self.system_control_client.pick_drink()
-            return
-
         if self.drink_location == "table":
             self.pick_drink_from_table()
         elif self.drink_location == "wheelchair_handle":
