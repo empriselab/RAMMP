@@ -1,18 +1,17 @@
-"""Demo runner that calls the cornell_feeding dummy action servers.
+"""Demo runner that calls the cornell_feeding drinking action servers.
 
 This script acts as a ROS 2 action client and exercises the feeding
 actions exposed by the drinking_node in Demo-Software/cornell_feeding:
-  1. GrabCup        – /arm/drink/grab_cup_from_table
-  2. BringCupToMouth – /arm/drink/bring_cup_to_mouth
-  3. HomeCup         – /arm/drink/home_cup
-  4. PutCupBack      – /arm/drink/put_cup_back_to_holder
+  1. GrabCupFromTable    – /arm/drink/grab_cup_from_table
+  2. BringCupToMouth     – /arm/drink/bring_cup_to_mouth
+  3. HomeCup             – /arm/drink/home_cup
+  4. PutCupBackToHolder  – /arm/drink/put_cup_back_to_holder
+  5. PickupAndOrder      – /arm/drink/pickup_and_order
 
 Usage:
-    ros2 run rammp demo_run              # default: grab from table, put back to table
-    ros2 run rammp demo_run --source wheelchair --destination wheelchair
+    ros2 run rammp demo_run
 """
 
-import argparse
 import sys
 
 import rclpy
@@ -20,10 +19,11 @@ from rclpy.node import Node
 from rclpy.action import ActionClient
 
 from cornell_feeding_interfaces.action import (
-    GrabCup,
+    GrabCupFromTable,
     BringCupToMouth,
     HomeCup,
-    PutCupBack,
+    PutCupBackToHolder,
+    PickupAndOrder,
 )
 
 
@@ -34,7 +34,7 @@ class FeedingDemoClient(Node):
         super().__init__("feeding_demo_client")
 
         self._grab_cup_client = ActionClient(
-            self, GrabCup, "/arm/drink/grab_cup_from_table"
+            self, GrabCupFromTable, "/arm/drink/grab_cup_from_table"
         )
         self._bring_cup_client = ActionClient(
             self, BringCupToMouth, "/arm/drink/bring_cup_to_mouth"
@@ -43,7 +43,10 @@ class FeedingDemoClient(Node):
             self, HomeCup, "/arm/drink/home_cup"
         )
         self._put_cup_back_client = ActionClient(
-            self, PutCupBack, "/arm/drink/put_cup_back_to_holder"
+            self, PutCupBackToHolder, "/arm/drink/put_cup_back_to_holder"
+        )
+        self._pickup_and_order_client = ActionClient(
+            self, PickupAndOrder, "/arm/drink/pickup_and_order"
         )
 
     def wait_for_servers(self, timeout_sec: float = 10.0) -> bool:
@@ -53,6 +56,7 @@ class FeedingDemoClient(Node):
             (self._bring_cup_client, "/arm/drink/bring_cup_to_mouth"),
             (self._home_cup_client, "/arm/drink/home_cup"),
             (self._put_cup_back_client, "/arm/drink/put_cup_back_to_holder"),
+            (self._pickup_and_order_client, "/arm/drink/pickup_and_order"),
         ]
         for client, name in clients:
             self.get_logger().info(f"Waiting for action server: {name}")
@@ -93,21 +97,19 @@ class FeedingDemoClient(Node):
             f"[{action_name}] Feedback: {feedback_msg.feedback.status}"
         )
 
-    def run_feeding_demo(self, source: str, destination: str, outside_mouth_distance: float):
+    def run_feeding_demo(self):
         """Execute the full feeding demo sequence."""
-        # Step 1: Grab the cup
-        grab_goal = GrabCup.Goal()
-        grab_goal.source = source
+        # Step 1: Grab the cup from table
+        grab_goal = GrabCupFromTable.Goal()
         result = self.send_goal_sync(
-            self._grab_cup_client, grab_goal, "GrabCup"
+            self._grab_cup_client, grab_goal, "GrabCupFromTable"
         )
         if result is None or not result.success:
-            self.get_logger().error("GrabCup failed, aborting demo.")
+            self.get_logger().error("GrabCupFromTable failed, aborting demo.")
             return
 
         # Step 2: Bring cup to mouth
         bring_goal = BringCupToMouth.Goal()
-        bring_goal.outside_mouth_distance = outside_mouth_distance
         result = self.send_goal_sync(
             self._bring_cup_client, bring_goal, "BringCupToMouth"
         )
@@ -124,43 +126,29 @@ class FeedingDemoClient(Node):
             self.get_logger().error("HomeCup failed, aborting demo.")
             return
 
-        # Step 4: Put the cup back
-        put_goal = PutCupBack.Goal()
-        put_goal.destination = destination
+        # Step 4: Put the cup back to holder
+        put_goal = PutCupBackToHolder.Goal()
         result = self.send_goal_sync(
-            self._put_cup_back_client, put_goal, "PutCupBack"
+            self._put_cup_back_client, put_goal, "PutCupBackToHolder"
         )
         if result is None or not result.success:
-            self.get_logger().error("PutCupBack failed, aborting demo.")
+            self.get_logger().error("PutCupBackToHolder failed, aborting demo.")
             return
 
         self.get_logger().info("Feeding demo completed successfully!")
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Run the feeding demo action client")
-    parser.add_argument("--source", type=str, default="table",
-                        choices=["table", "wheelchair"],
-                        help="Where to grab the cup from")
-    parser.add_argument("--destination", type=str, default="table",
-                        choices=["table", "wheelchair"],
-                        help="Where to put the cup back")
-    parser.add_argument("--outside_mouth_distance", type=float, default=0.05,
-                        help="Distance to hold cup from mouth (meters)")
-    parser.add_argument("--timeout", type=float, default=10.0,
-                        help="Timeout waiting for action servers (seconds)")
-    args = parser.parse_args()
-
     rclpy.init()
     node = FeedingDemoClient()
 
-    if not node.wait_for_servers(timeout_sec=args.timeout):
+    if not node.wait_for_servers(timeout_sec=10.0):
         node.get_logger().error("Could not connect to action servers. Is drinking_node running?")
         node.destroy_node()
         rclpy.shutdown()
         sys.exit(1)
 
-    node.run_feeding_demo(args.source, args.destination, args.outside_mouth_distance)
+    node.run_feeding_demo()
 
     node.destroy_node()
     rclpy.shutdown()
