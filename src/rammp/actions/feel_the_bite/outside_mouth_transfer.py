@@ -3,11 +3,7 @@ import numpy as np
 from scipy.spatial.transform import Rotation
 import pickle
 
-try:
-    import rospy
-    from std_msgs.msg import Bool
-except ModuleNotFoundError:
-    ROSPY_IMPORTED = False
+from std_msgs.msg import Bool
 
 from rammp.simulation.simulator import FeedingDeploymentPyBulletSimulator
 from rammp.control.robot_controller.arm_client import ArmInterfaceClient
@@ -22,15 +18,15 @@ DISTANCE_INFRONT_MOUTH = 0.10
 
 class OutsideMouthTransfer(Transfer):
 
-    def __init__(self, sim : FeedingDeploymentPyBulletSimulator, robot_interface: ArmInterfaceClient, perception_interface: PerceptionInterface, rviz_interface: RVizInterface, no_waits=False, log_dir=None):
-            
-        super().__init__(sim, robot_interface, perception_interface, rviz_interface, no_waits)
+    def __init__(self, sim : FeedingDeploymentPyBulletSimulator, robot_interface: ArmInterfaceClient, perception_interface: PerceptionInterface, rviz_interface: RVizInterface, no_waits=False, log_dir=None, node=None):
+
+        super().__init__(sim, robot_interface, perception_interface, rviz_interface, no_waits, node=node)
 
         self.log_dir = log_dir
 
     def move_to_transfer_state(self, outside_mouth_distance, maintain_position_at_goal = False):
 
-        if self.robot_interface is not None:
+        if self.set_filter_noisy_readings_pub is not None:
             self.set_filter_noisy_readings_pub.publish(Bool(data=True))
 
         # move to infront of mouth
@@ -62,7 +58,7 @@ class OutsideMouthTransfer(Transfer):
 
         self.move_to_ee_pose(target_pose)
 
-        if self.robot_interface is not None:
+        if self.set_filter_noisy_readings_pub is not None:
             self.set_filter_noisy_readings_pub.publish(Bool(data=False))
 
     def move_to_before_transfer_state(self):

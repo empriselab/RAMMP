@@ -1,15 +1,36 @@
 #!/usr/bin/env python3
 import math
 import time
-import rospy
+import threading
+
+from rclpy.node import Node
 from visualization_msgs.msg import Marker
 from geometry_msgs.msg import Point
 from sensor_msgs.msg import Imu
-from tf.transformations import (
-    quaternion_inverse,
-    quaternion_multiply,
-    euler_from_quaternion,
-)
+from scipy.spatial.transform import Rotation
+
+
+def _quaternion_multiply(q1, q2):
+    """Hamilton product of two quaternions [x, y, z, w]."""
+    x1, y1, z1, w1 = q1
+    x2, y2, z2, w2 = q2
+    return [
+        w1*x2 + x1*w2 + y1*z2 - z1*y2,
+        w1*y2 - x1*z2 + y1*w2 + z1*x2,
+        w1*z2 + x1*y2 - y1*x2 + z1*w2,
+        w1*w2 - x1*x2 - y1*y2 - z1*z2,
+    ]
+
+
+def _quaternion_inverse(q):
+    """Inverse of a unit quaternion [x, y, z, w]."""
+    return [-q[0], -q[1], -q[2], q[3]]
+
+
+def _euler_from_quaternion(q):
+    """Convert quaternion [x, y, z, w] to euler angles (roll, pitch, yaw)."""
+    r = Rotation.from_quat(q)
+    return r.as_euler('xyz')
 
 
 class MaintainHomeOrientation:
@@ -23,15 +44,17 @@ class MaintainHomeOrientation:
         1.5707649014940337,
     ]
 
-    Q_IMU_CL = quaternion_inverse([-0.5, 0.5, -0.5, 0.5])
-    DEADBAND = math.radians(1.0) # 1 degree
+    Q_IMU_CL = _quaternion_inverse([-0.5, 0.5, -0.5, 0.5])
+    DEADBAND = math.radians(1.0)  # 1 degree
     ALPHA = 0.8
 
-    def __init__(self, arm_interface):
+    def __init__(self, arm_interface, node: Node = None):
         """
         arm_interface: ArmInterface
+        node: rclpy Node for creating subscriptions/publishers/timers
         """
         self.arm_interface = arm_interface
+        self._node = node
 
         self.roll = 0.0
         self.pitch = 0.0
@@ -41,16 +64,22 @@ class MaintainHomeOrientation:
         self._active = False
         self._timer = None
 
-        self._imu_sub = rospy.Subscriber(
-            "/imu/data", Imu, self._imu_cb, queue_size=50
-        )
+        if self._node is not None:
+            self._imu_sub = self._node.create_subscription(
+                Imu, "/imu/data", self._imu_cb, 50
+            )
+            self._marker_pub = self._node.create_publisher(
+                Marker, "/gravity_marker", 1
+            )
+        else:
+            self._imu_sub = None
+            self._marker_pub = None
 
-        self._marker_pub = rospy.Publisher(
-            "/gravity_marker",
-            Marker,
-            queue_size=1
-        )
-
+    def _log_info(self, msg):
+        if self._node is not None:
+            self._node.get_logger().info(msg)
+        else:
+            print(msg)
 
     # ----------------------------
     # IMU callback
@@ -59,8 +88,8 @@ class MaintainHomeOrientation:
         q = msg.orientation
         q_g_imu = [q.x, q.y, q.z, q.w]
 
-        q_g_cl = quaternion_multiply(q_g_imu, self.Q_IMU_CL)
-        r, p, _ = euler_from_quaternion(q_g_cl)
+        q_g_cl = _quaternion_multiply(q_g_imu, self.Q_IMU_CL)
+        r, p, _ = _euler_from_quaternion(q_g_cl)
 
         # Publish gravity arrow
         self.publish_gravity_marker(q_g_cl)
@@ -69,99 +98,81 @@ class MaintainHomeOrientation:
         if self._active and self.roll_ref is None:
             self.roll_ref = r
             self.pitch_ref = p
-            rospy.loginfo(
-                "IMU reference locked: roll=%.2f° pitch=%.2f°",
-                math.degrees(r),
-                math.degrees(p),
+            self._log_info(
+                f"IMU reference locked: roll={math.degrees(r):.2f}° pitch={math.degrees(p):.2f}°"
             )
 
         if self.roll_ref is not None:
             self.roll = r - self.roll_ref
             self.pitch = p - self.pitch_ref
-        
-            # print("--- IMU Callback ---")
-            # print(f"IMU Readings | roll: {math.degrees(self.roll):.2f}° | pitch: {math.degrees(self.pitch):.2f}°")
-            # print(f"Reference   | roll_ref: {math.degrees(self.roll_ref):.2f}° | pitch_ref: {math.degrees(self.pitch_ref):.2f}°")
-            # print(f"Raw IMU    | roll: {math.degrees(r):.2f}° | pitch: {math.degrees(p):.2f}°")
-            # print("---------------------")
 
     def publish_gravity_marker(self, q_g_cl):
-        """
-        Publish gravity direction as an arrow marker
-        """
+        """Publish gravity direction as an arrow marker."""
+        if self._marker_pub is None:
+            return
 
-        # Gravity direction in local frame
         v = [0.0, 0.0, -1.0]
         q_vec = [v[0], v[1], v[2], 0.0]
-        q_inv = quaternion_inverse(q_g_cl)
-        v_rot = quaternion_multiply(
-            quaternion_multiply(q_g_cl, q_vec),
+        q_inv = _quaternion_inverse(q_g_cl)
+        v_rot = _quaternion_multiply(
+            _quaternion_multiply(q_g_cl, q_vec),
             q_inv
         )
         g_local = v_rot[:3]
 
         marker = Marker()
-        marker.header.frame_id = "base_link"   # or imu_link / world
-        marker.header.stamp = rospy.Time.now()
+        marker.header.frame_id = "base_link"
+        if self._node is not None:
+            marker.header.stamp = self._node.get_clock().now().to_msg()
         marker.ns = "gravity"
         marker.id = 0
         marker.type = Marker.ARROW
         marker.action = Marker.ADD
 
-        # Arrow start & end
-        p0 = Point(0.0, 0.0, 0.0)
-        scale = 0.5  # arrow length
+        p0 = Point(x=0.0, y=0.0, z=0.0)
+        scale = 0.5
         p1 = Point(
-            scale * g_local[0],
-            scale * g_local[1],
-            scale * g_local[2],
+            x=scale * g_local[0],
+            y=scale * g_local[1],
+            z=scale * g_local[2],
         )
 
         marker.points = [p0, p1]
 
-        # Arrow thickness
-        marker.scale.x = 0.03  # shaft diameter
-        marker.scale.y = 0.06  # head diameter
-        marker.scale.z = 0.1   # head length
+        marker.scale.x = 0.03
+        marker.scale.y = 0.06
+        marker.scale.z = 0.1
 
-        # Color (red)
         marker.color.r = 1.0
         marker.color.g = 0.0
         marker.color.b = 0.0
         marker.color.a = 1.0
 
-        marker.lifetime = rospy.Duration(0)
+        marker.lifetime.sec = 0
+        marker.lifetime.nanosec = 0
 
         self._marker_pub.publish(marker)
-
 
     # ----------------------------
     # Control loop (Timer)
     # ----------------------------
-    def _control_cb(self, event):
+    def _control_cb(self):
         if not self._active:
             return
 
         if abs(self.roll) < self.DEADBAND and abs(self.pitch) < self.DEADBAND:
-            rospy.loginfo("Within deadband | roll=%.2f° pitch=%.2f°", math.degrees(self.roll), math.degrees(self.pitch))
+            self._log_info(f"Within deadband | roll={math.degrees(self.roll):.2f}° pitch={math.degrees(self.pitch):.2f}°")
             return
 
-        # print("Waiting for 10 secs...")
-        # time.sleep(10.0) # delay to ensure stability
-        # input("Press enter to correct orientation...")
-        # cmd = self.HOME_POS.copy()
         cmd = self.arm_interface.get_state()['position'].tolist()
         print("CURRENT POS:", cmd)
         cmd[5] = cmd[5] + self.ALPHA * self.pitch
         cmd[6] = cmd[6] + self.ALPHA * self.roll
         print("Commanded POS:", cmd)
 
-        rospy.loginfo(
-            "Correcting | roll=%.1f° %.1f radians | pitch=%.1f° %.1f radians",
-            math.degrees(self.roll), 
-            self.roll,
-            math.degrees(self.pitch),
-            self.pitch,
+        self._log_info(
+            f"Correcting | roll={math.degrees(self.roll):.1f}° {self.roll:.1f} radians "
+            f"| pitch={math.degrees(self.pitch):.1f}° {self.pitch:.1f} radians"
         )
 
         self.arm_interface.set_joint_position(cmd)
@@ -170,13 +181,11 @@ class MaintainHomeOrientation:
     # Public API
     # ----------------------------
     def start(self):
-        """
-        Start maintaining upright orientation (non-blocking).
-        """
+        """Start maintaining upright orientation (non-blocking)."""
         if self._active:
             return
 
-        rospy.loginfo("Starting MaintainHomeOrientation")
+        self._log_info("Starting MaintainHomeOrientation")
 
         self.roll_ref = None
         self.pitch_ref = None
@@ -188,39 +197,33 @@ class MaintainHomeOrientation:
         self.arm_interface.set_joint_position(self.HOME_POS)
         time.sleep(2.0)
 
-
         self._active = True
 
-        # input("Press enter to correct orientation...")
-
-        # rospy.loginfo(
-        #     "Correcting | roll=%.1f° %.1f radians | pitch=%.1f° %.1f radians",
-        #     math.degrees(self.roll), 
-        #     self.roll,
-        #     math.degrees(self.pitch),
-        #     self.pitch,
-        # )
-
-        # self.arm_interface.set_joint_position(cmd)
-        self._timer = rospy.Timer(
-            rospy.Duration(0.5), self._control_cb
-        )  # 2 Hz
-
-        # print('Corrected Position: ', self.arm_interface.get_state()['position'])
+        if self._node is not None:
+            self._timer = self._node.create_timer(0.5, self._control_cb)
+        else:
+            # Fallback: run control loop in a thread
+            self._stop_event = threading.Event()
+            def _loop():
+                while not self._stop_event.is_set():
+                    self._control_cb()
+                    self._stop_event.wait(0.5)
+            self._timer_thread = threading.Thread(target=_loop, daemon=True)
+            self._timer_thread.start()
 
     def stop(self):
-        """
-        Stop maintaining upright orientation.
-        """
+        """Stop maintaining upright orientation."""
         if not self._active:
             return
 
-        rospy.loginfo("Stopping MaintainHomeOrientation")
+        self._log_info("Stopping MaintainHomeOrientation")
 
         self._active = False
-        if self._timer is not None:
-            self._timer.shutdown()
+        if self._node is not None and self._timer is not None:
+            self._timer.cancel()
             self._timer = None
+        elif hasattr(self, '_stop_event'):
+            self._stop_event.set()
 
         self.arm_interface.set_speed("medium")
-        time.sleep(5.0) # Allow time to change speed
+        time.sleep(5.0)

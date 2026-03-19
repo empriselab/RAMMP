@@ -58,7 +58,7 @@ class ArmInterfaceClient:
         # This will now use the single, shared instance of ArmInterface
         self._arm_interface = self.manager.ArmInterface()
 
-        self.maintain_home_orientation = MaintainHomeOrientation(self._arm_interface)
+        self.maintain_home_orientation = MaintainHomeOrientation(self._arm_interface, node=node)
 
     def _watchdog_callback(self, msg):
         self._watchdog_received = True

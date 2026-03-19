@@ -2,31 +2,31 @@
 import abc
 import numpy as np
 
+from std_msgs.msg import Bool
+
 from rammp.simulation.simulator import FeedingDeploymentPyBulletSimulator
 from rammp.control.robot_controller.arm_client import ArmInterfaceClient
 from rammp.interfaces.perception_interface import PerceptionInterface
 from rammp.interfaces.rviz_interface import RVizInterface
 from rammp.control.robot_controller.command_interface import CartesianCommand
 
-try:
-    import rospy
-    from std_msgs.msg import Bool
-except ModuleNotFoundError:
-    ROSPY_IMPORTED = False
 
 class Transfer(abc.ABC):
     """ Base class for transfer actions. """
 
-    def __init__(self, sim : FeedingDeploymentPyBulletSimulator, robot_interface: ArmInterfaceClient, perception_interface: PerceptionInterface, rviz_interface: RVizInterface, no_waits=False):
-            
+    def __init__(self, sim : FeedingDeploymentPyBulletSimulator, robot_interface: ArmInterfaceClient, perception_interface: PerceptionInterface, rviz_interface: RVizInterface, no_waits=False, node=None):
+
         self.sim = sim
         self.robot_interface = robot_interface
         self.perception_interface = perception_interface
         self.rviz_interface = rviz_interface
         self.no_waits = no_waits
+        self._node = node
 
-        if self.robot_interface is not None:
-            self.set_filter_noisy_readings_pub = rospy.Publisher('/head_perception/set_filter_noisy_readings', Bool, queue_size=1)
+        if self.robot_interface is not None and self._node is not None:
+            self.set_filter_noisy_readings_pub = self._node.create_publisher(Bool, '/head_perception/set_filter_noisy_readings', 1)
+        else:
+            self.set_filter_noisy_readings_pub = None
 
     def set_tool(self, tool):
         self.tool = tool

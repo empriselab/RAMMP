@@ -4,20 +4,8 @@ Entrypoint for controlling the robot arm on compute machine. Additionally runs t
 2. A thread that publishes joint states to ROS
 '''
 
-import threading
-import time
-import numpy as np
-
-try:
-    import rospy
-    from sensor_msgs.msg import JointState
-    from std_msgs.msg import Bool
-    from geometry_msgs.msg import Pose
-    # from netft_rdt_driver.srv import String_cmd
-    ROSPY_IMPORTED = True
-except ModuleNotFoundError as e:
-    # print(f"ROS not imported: {e}")
-    ROSPY_IMPORTED = False
+import rclpy
+from std_msgs.msg import Bool
 
 from rammp.control.robot_controller.arm_interface import ArmInterface, ArmManager, NUC_HOSTNAME, ARM_RPC_PORT, RPC_AUTHKEY
 from rammp.control.robot_controller.command_interface import KinovaCommand, JointTrajectoryCommand, JointCommand, CartesianCommand, OpenGripperCommand, CloseGripperCommand
@@ -26,12 +14,19 @@ from rammp.control.robot_controller.command_interface import KinovaCommand, Join
 
 if __name__ == "__main__":
 
-    assert ROSPY_IMPORTED, "ROS is required to run on the real robot"
-    rospy.init_node("before_transfer_action")
+    rclpy.init()
+    node = rclpy.create_node("before_transfer_action")
 
     # make sure watchdog is running
     print("Waiting for Watchdog status...")
-    rospy.wait_for_message("/watchdog_status", Bool)
+    received = False
+    def cb(msg):
+        nonlocal received
+        received = True
+    sub = node.create_subscription(Bool, "/watchdog_status", cb, 10)
+    while not received:
+        rclpy.spin_once(node, timeout_sec=0.1)
+    node.destroy_subscription(sub)
     print("Watchdog is running, moving to before transfer configuration...")
 
     # Register ArmInterface (no lambda needed on the client-side)
@@ -46,3 +41,6 @@ if __name__ == "__main__":
 
     before_transfer_pos = [-2.86554642, -1.61951779, -2.60986085, -1.37302839, 1.11779249, -1.18028264, 2.05515862]
     arm_interface.set_joint_position(before_transfer_pos)
+
+    node.destroy_node()
+    rclpy.shutdown()

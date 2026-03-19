@@ -8,12 +8,6 @@ from pathlib import Path
 import json
 from pybullet_helpers.geometry import Pose
 
-try:
-    import rospy
-    from std_msgs.msg import Bool
-except ModuleNotFoundError:
-    ROSPY_IMPORTED = False
-
 from relational_structs import (
     GroundAtom,
     GroundOperator,

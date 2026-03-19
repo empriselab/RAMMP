@@ -4,20 +4,10 @@ Entrypoint for controlling the robot arm on compute machine. Additionally runs t
 2. A thread that publishes joint states to ROS
 '''
 
-import threading
 import time
-import numpy as np
 
-try:
-    import rospy
-    from sensor_msgs.msg import JointState
-    from std_msgs.msg import Bool
-    from geometry_msgs.msg import Pose
-    # from netft_rdt_driver.srv import String_cmd
-    ROSPY_IMPORTED = True
-except ModuleNotFoundError as e:
-    # print(f"ROS not imported: {e}")
-    ROSPY_IMPORTED = False
+import rclpy
+from std_msgs.msg import Bool
 
 from rammp.control.robot_controller.arm_interface import ArmInterface, ArmManager, NUC_HOSTNAME, ARM_RPC_PORT, RPC_AUTHKEY
 from rammp.control.robot_controller.command_interface import KinovaCommand, JointTrajectoryCommand, JointCommand, CartesianCommand, OpenGripperCommand, CloseGripperCommand
@@ -31,13 +21,20 @@ if __name__ == "__main__":
     parser.add_argument("--sleep", type=float, default=0.0, help="Time to sleep before closing gripper")
     args = parser.parse_args()
     time.sleep(args.sleep)
-    
-    assert ROSPY_IMPORTED, "ROS is required to run on the real robot"
-    rospy.init_node("close_gripper_action")
+
+    rclpy.init()
+    node = rclpy.create_node("close_gripper_action")
 
     # make sure watchdog is running
     print("Waiting for Watchdog status...")
-    rospy.wait_for_message("/watchdog_status", Bool)
+    received = False
+    def cb(msg):
+        nonlocal received
+        received = True
+    sub = node.create_subscription(Bool, "/watchdog_status", cb, 10)
+    while not received:
+        rclpy.spin_once(node, timeout_sec=0.1)
+    node.destroy_subscription(sub)
     print("Watchdog is running, closing gripper...")
 
     # Register ArmInterface (no lambda needed on the client-side)
@@ -50,3 +47,6 @@ if __name__ == "__main__":
     # This will now use the single, shared instance of ArmInterface
     arm_interface = manager.ArmInterface()
     arm_interface.close_gripper()
+
+    node.destroy_node()
+    rclpy.shutdown()
