@@ -131,3 +131,9 @@ python3 src/rammp/integration/demo_run.py
 - **"Action server not available"**: Make sure both machines use the same `ROS_DOMAIN_ID` and are on the same network. Check with `ros2 node list` and `ros2 action list` on the client machine.
 - **Import errors for `cornell_feeding_interfaces`**: The interface package must be built (`colcon build --packages-select cornell_feeding_interfaces`) and sourced (`source install/setup.bash`) on the machine that fails.
 - **Firewall issues**: ROS2 DDS uses multicast by default. If cross-machine discovery fails, check firewall rules or try setting `ROS_LOCALHOST_ONLY=0`.
+
+
+
+## Run in sim
+ros2 run cornell_feeding drinking_node --ros-args \
+  -p run_on_robot:=false
