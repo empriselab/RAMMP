@@ -137,4 +137,5 @@ python3 src/rammp/integration/demo_run.py
 ## Run in sim
 ros2 run cornell_feeding drinking_node --ros-args \
   -p run_on_robot:=false \
-  -p use_gui:=true
+  -p use_gui:=false \
+  -p save_dir:=/path/to/output/frames
