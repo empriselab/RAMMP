@@ -100,14 +100,36 @@ if __name__ == "__main__":
     if run_commands != "y":
         exit()
 
-    # inside_handle_pose = [-0.31010666489601135, -0.018085628747940063, 0.1462610810995102, 0.02322167404813943, 0.7180926934794382, 0.6955542280407613, 0.0028201561070785135]
-    # arm_client_interface.execute_command(CartesianCommand(pos=inside_handle_pose[:3], quat=inside_handle_pose[3:]))
+    # input("Press enter to close gripper...")
+    # arm_client_interface.execute_command(CloseGripperCommand())
 
-    above_inside_handle_pose = [-0.31010666489601135, -0.018085628747940063, 0.1062610810995102, 0.02322167404813943, 0.7180926934794382, 0.6955542280407613, 0.0028201561070785135]
-    arm_client_interface.execute_command(CartesianCommand(pos=above_inside_handle_pose[:3], quat=above_inside_handle_pose[3:]))
+    # input("Press enter to continue to outside handle pose...")
+    # outside_handle_pose = [-0.2942967116832733, -0.125764569640159607, 0.07549066483974457, 0.03666796462650288, 0.7174768545096796, 0.6954346334072048, 0.01590893682281142]
+    # arm_client_interface.execute_command(CartesianCommand(pos=outside_handle_pose[:3], quat=outside_handle_pose[3:]))
 
-    outside_handle_pose = [-0.31010666489601135, -0.118085628747940063, 0.1062610810995102, 0.02322167404813943, 0.7180926934794382, 0.6955542280407613, 0.0028201561070785135]
-    arm_client_interface.execute_command(CartesianCommand(pos=outside_handle_pose[:3], quat=outside_handle_pose[3:]))
+    # input("Press enter to continue to below handle pose...")
+    # below_handle_pose = [-0.2942967116832733, -0.025764569640159607, 0.07549066483974457, 0.03666796462650288, 0.7174768545096796, 0.6954346334072048, 0.01590893682281142]
+    # arm_client_interface.execute_command(CartesianCommand(pos=below_handle_pose[:3], quat=below_handle_pose[3:]))
+
+    input("Press enter to continue to inside handle pose...")
+    inside_handle_pose = [-0.2942967116832733, -0.025764569640159607, 0.11549066483974457, 0.03666796462650288, 0.7174768545096796, 0.6954346334072048, 0.01590893682281142]
+    arm_client_interface.execute_command(CartesianCommand(pos=inside_handle_pose[:3], quat=inside_handle_pose[3:]))
+
+    # input("Press enter to open gripper on handle...")
+    # arm_client_interface.execute_command(OpenGripperCommand())
+
+    input("Press enter to continue to above handle pose...")
+    above_handle_pose = [-0.2842967116832733, -0.017764569640159607, 0.22549066483974457, 0.03666796462650288, 0.7174768545096796, 0.6954346334072048, 0.01590893682281142]
+    arm_client_interface.execute_command(CartesianCommand(pos=above_handle_pose[:3], quat=above_handle_pose[3:]))
+
+    # outside_handle_pose = [-0.30510666489601135, -0.123085628747940063, 0.0562610810995102, 0.02322167404813943, 0.7180926934794382, 0.6955542280407613, 0.0028201561070785135]
+    # arm_client_interface.execute_command(CartesianCommand(pos=outside_handle_pose[:3], quat=outside_handle_pose[3:]))
+
+    # above_inside_handle_pose = [-0.31010666489601135, -0.018085628747940063, 0.1062610810995102, 0.02322167404813943, 0.7180926934794382, 0.6955542280407613, 0.0028201561070785135]
+    # arm_client_interface.execute_command(CartesianCommand(pos=above_inside_handle_pose[:3], quat=above_inside_handle_pose[3:]))
+
+    # outside_handle_pose = [-0.31010666489601135, -0.118085628747940063, 0.1062610810995102, 0.02322167404813943, 0.7180926934794382, 0.6955542280407613, 0.0028201561070785135]
+    # arm_client_interface.execute_command(CartesianCommand(pos=outside_handle_pose[:3], quat=outside_handle_pose[3:]))
 
     # arm_client_interface.start_maintain_home_orientation()
     # input("Press enter to stop maintaining home orientation...")

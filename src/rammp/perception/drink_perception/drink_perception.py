@@ -167,6 +167,13 @@ class DrinkPerception(TFInterface):
         # Color mask
         # -----------------------------
         mask = self.detect_handle_color(rgb_image)
+
+        # save mask for debugging (overlay on RGB)
+        vis = rgb_image.copy()
+        vis[mask > 0] = (0, 255, 0)
+        cv2.imwrite("color_mask.png", vis)
+
+
         mask = self.clean_mask(mask)
 
         # -----------------------------
@@ -230,7 +237,7 @@ class DrinkPerception(TFInterface):
         vis = rgb_image.copy()
         vis[cluster_mask > 0] = (0, 0, 255)
 
-        # cv2.imwrite("handle_mask.png", vis)
+        cv2.imwrite("handle_mask.png", vis)
         # rospy.loginfo(
         #     f"Saved handle_mask.png with {cluster_pixels.shape[0]} pixels")
         
@@ -352,8 +359,18 @@ class DrinkPerception(TFInterface):
 
     def detect_handle_color(self, bgr_image):
         hsv = cv2.cvtColor(bgr_image, cv2.COLOR_BGR2HSV)
-        lower = np.array([60, 50, 50])
-        upper = np.array([95, 180, 200])
+        # lower = np.array([60, 50, 50])
+        # upper = np.array([95, 180, 200])
+        # Wider but still green-focused
+        # lower = np.array([50, 30, 30])
+        # upper = np.array([105, 255, 255])
+
+        # lower = np.array([80, 120, 120])
+        # upper = np.array([100, 255, 255])
+        
+        lower = np.array([70, 70, 70])
+        upper = np.array([110, 255, 255])
+
         return cv2.inRange(hsv, lower, upper)
 
     def clean_mask(self, mask):

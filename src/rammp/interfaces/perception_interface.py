@@ -249,7 +249,7 @@ class PerceptionInterface:
         def get_pre_grasp_transform():
             tf = np.zeros((4, 4))
             tf[:3, :3] = R.from_euler("xyz", [np.pi, 0, np.pi / 2]).as_matrix()
-            tf[:3, 3] = np.array([0.02, 0.0, 0.15]) 
+            tf[:3, 3] = np.array([0.02, 0.01, 0.15]) 
             tf[3, 3] = 1
             return tf
 
@@ -260,7 +260,7 @@ class PerceptionInterface:
 
         def get_inside_top_transform():
             tf = get_inside_bottom_transform()
-            tf[0, 3] = 0.05
+            tf[0, 3] = 0.043
             return tf
         
         def get_post_grasp_pose():

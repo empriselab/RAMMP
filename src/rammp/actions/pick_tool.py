@@ -47,15 +47,6 @@ class PickToolHLA(HighLevelAction):
         tool = objects[0]
         assert tool.name in ["drink"]
         return f"pick_{tool.name}.yaml"
-
-# inside_drink_handle_pos: JointPositions
-# inside_drink_handle_pose: Pose
-# above_drink_handle_pos: JointPositions
-# above_drink_handle_pose: Pose
-# below_drink_handle_pos: JointPositions
-# below_drink_handle_pose: Pose   
-# outside_drink_handle_pos: JointPositions
-# outside_drink_handle_pose: Pose
         
     def pick_drink(self, speed: str) -> None:
         assert self.sim.held_object_name is None
@@ -71,13 +62,13 @@ class PickToolHLA(HighLevelAction):
             raise ValueError(f"Invalid drink location: {self.drink_location}")
 
     def pick_drink_from_table(self) -> None:
-        self.move_to_joint_positions(self.sim.scene_description.retract_pos)
+        # self.move_to_joint_positions(self.sim.scene_description.retract_pos)
+        self.move_to_joint_positions(self.sim.scene_description.home_pos)
         self.close_gripper()
         self.move_to_joint_positions(self.sim.scene_description.drink_gaze_pos)
 
         drink_poses = self.perception_interface.perceive_drink_pickup_poses()
 
-        # self.move_to_joint_positions(self.sim.scene_description.drink_staging_pos)
         self.move_to_ee_pose(drink_poses['pre_grasp_pose'])
         self.move_to_ee_pose(drink_poses['inside_bottom_pose'])
         self.move_to_ee_pose(drink_poses['inside_top_pose'])
@@ -86,10 +77,11 @@ class PickToolHLA(HighLevelAction):
 
         self.perception_interface.record_drink_pickup_joint_pos()
 
+        self.move_to_joint_positions(self.sim.scene_description.drink_staging_pos)
         self.move_to_joint_positions(self.sim.scene_description.home_pos)
         
-        if self.robot_interface is not None:
-            self.robot_interface.start_maintain_home_orientation()
+        # if self.robot_interface is not None:
+            # self.robot_interface.start_maintain_home_orientation()
         # self.move_to_joint_positions(self.sim.scene_description.drink_before_transfer_pos)
         
     def pick_drink_from_wheelchair(self) -> None:

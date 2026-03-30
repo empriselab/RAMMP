@@ -54,8 +54,8 @@ class StowToolHLA(HighLevelAction):
         if self.robot_interface is not None:
             self.robot_interface.set_speed(speed)
 
-        if self.robot_interface is not None:
-            self.robot_interface.stop_maintain_home_orientation()
+        # if self.robot_interface is not None:
+        #     self.robot_interface.stop_maintain_home_orientation()
 
         if self.drink_location == "table":
             self.stow_drink_on_table()
@@ -70,9 +70,10 @@ class StowToolHLA(HighLevelAction):
         
         self.move_to_joint_positions(self.sim.scene_description.home_pos)
         self.move_to_ee_pose(self.sim.scene_description.drink_handover_pose)
-        # input("Press Enter to ungrasp drink")
-        time.sleep(5.0) # Wait for 5 seconds to simulate waiting for the human to take the drink
+        input("Press Enter to ungrasp drink")
+        # time.sleep(5.0) # Wait for 5 seconds to simulate waiting for the human to take the drink
         self.ungrasp_tool("drink")
+        time.sleep(3.0) # Wait for 1 second after ungrasping
         self.move_to_joint_positions(self.sim.scene_description.home_pos)
 
     def stow_drink_in_wheelchair(self) -> None:
@@ -97,4 +98,5 @@ class StowToolHLA(HighLevelAction):
         self.move_to_ee_pose(last_drink_poses['place_inside_bottom_pose'])
         self.move_to_ee_pose(last_drink_poses['place_pre_grasp_pose'])
         self.move_to_joint_positions(self.sim.scene_description.drink_staging_pos)
+        self.move_to_joint_positions(self.sim.scene_description.home_pos)
         self.move_to_joint_positions(self.sim.scene_description.retract_pos)

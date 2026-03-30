@@ -387,8 +387,12 @@ if __name__ == "__main__":
     signal.signal(signal.SIGINT, runner.signal_handler)
     
     if not args.use_interface:
+        # for i in range(10):
+        # runner.process_user_command(GroundHighLevelAction(runner.hla_name_to_hla["PickTool"], (runner.drink,), params={"drink_location": "table"}))
         runner.process_user_command(GroundHighLevelAction(runner.hla_name_to_hla["PickTool"], (runner.drink,), params={"drink_location": "wheelchair_handle"}))
         runner.process_user_command(GroundHighLevelAction(runner.hla_name_to_hla["StowTool"], (runner.drink,), params={"drink_location": "handover"}))
+        
+        input("Press Enter to pickup drink from the table and start transfer...")
         runner.process_user_command(GroundHighLevelAction(runner.hla_name_to_hla["TransferTool"], (runner.drink,)))
         runner.process_user_command(GroundHighLevelAction(runner.hla_name_to_hla["StowTool"], (runner.drink,), params={"drink_location": "wheelchair_handle"}))
 

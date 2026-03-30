@@ -190,8 +190,8 @@ class TransferToolHLA(HighLevelAction):
 
         # input("Press Enter to stop maintaining home orientation")
 
-        if self.robot_interface is not None:
-            self.robot_interface.stop_maintain_home_orientation()
+        # if self.robot_interface is not None:
+        #     self.robot_interface.stop_maintain_home_orientation()
 
         # self.move_to_joint_positions(self.sim.scene_description.home_pos)
         self.move_to_joint_positions(self.sim.scene_description.drink_transfer_waypoint_pos)
@@ -205,5 +205,5 @@ class TransferToolHLA(HighLevelAction):
         self.move_to_joint_positions(self.sim.scene_description.drink_transfer_waypoint_pos)
         self.move_to_joint_positions(self.sim.scene_description.home_pos)
 
-        if self.robot_interface is not None:
-            self.robot_interface.start_maintain_home_orientation()
+        # if self.robot_interface is not None:
+        #     self.robot_interface.start_maintain_home_orientation()
