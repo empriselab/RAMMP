@@ -5,6 +5,8 @@ from pybullet_helpers.geometry import Pose
 from scipy.spatial.transform import Rotation as R
 import pickle
 
+from rclpy.node import Node
+
 from rammp.interfaces.realsense_interface import RealSenseInterface
 
 from rammp.perception.drink_perception.drink_perception import DrinkPerception
@@ -13,12 +15,13 @@ from rammp.perception.head_perception.deca_perception import HeadPerception
 class PerceptionInterface:
     """An interface for perception (robot joints, human head poses, etc.)."""
 
-    def __init__(self, simulation: bool = False, log_dir: str | None = None) -> None:
-        self.log_dir = log_dir
+    def __init__(self, node: Node, simulation: bool = False, log_dir: str | None = None) -> None:
+        self.node = node
         self.simulation = simulation
+        self.log_dir = log_dir
 
         if not self.simulation:
-            self.realsense_interface = RealSenseInterface()
+            self.realsense_interface = RealSenseInterface(self.node)
 
             self._head_perception = HeadPerception()
             # Warm start head perception

@@ -1,33 +1,28 @@
 <?xml version="1.0"?>
-<package format="2">
+<package format="3">
   <name>drink_actions_test</name>
   <version>0.0.1</version>
-  <description>
-    ROS1 test package for drink-related action servers and clients.
-  </description>
+  <description>ROS2 Humble package for drink-related action servers and clients.</description>
 
   <maintainer email="you@example.com">Your Name</maintainer>
   <license>TODO</license>
 
-  <buildtool_depend>catkin</buildtool_depend>
+  <buildtool_depend>ament_cmake</buildtool_depend>
 
-  <build_depend>actionlib</build_depend>
-  <build_depend>actionlib_msgs</build_depend>
-  <build_depend>message_generation</build_depend>
-  <build_depend>rospy</build_depend>
+  <build_depend>rosidl_default_generators</build_depend>
   <build_depend>std_msgs</build_depend>
 
-  <build_export_depend>actionlib</build_export_depend>
-  <build_export_depend>actionlib_msgs</build_export_depend>
-  <build_export_depend>rospy</build_export_depend>
   <build_export_depend>std_msgs</build_export_depend>
 
-  <exec_depend>actionlib</exec_depend>
-  <exec_depend>actionlib_msgs</exec_depend>
-  <exec_depend>message_runtime</exec_depend>
-  <exec_depend>rospy</exec_depend>
+  <exec_depend>rosidl_default_runtime</exec_depend>
   <exec_depend>std_msgs</exec_depend>
+  <exec_depend>rclpy</exec_depend>
+  <exec_depend>launch</exec_depend>
+  <exec_depend>launch_ros</exec_depend>
+
+  <member_of_group>rosidl_interface_packages</member_of_group>
 
   <export>
+    <build_type>ament_cmake</build_type>
   </export>
 </package>

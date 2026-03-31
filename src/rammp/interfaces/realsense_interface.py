@@ -9,18 +9,23 @@ import cv2
 import argparse
 import message_filters
 import numpy as np
-import rospy
+import rclpy
 import tf2_ros
+
 from cv_bridge import CvBridge, CvBridgeError
 from geometry_msgs.msg import Point, TransformStamped, WrenchStamped
+from rclpy.node import Node
+from rclpy.time import Time
 from scipy.spatial.transform import Rotation
 from sensor_msgs import point_cloud2
 from sensor_msgs.msg import CameraInfo, Image, PointCloud2, PointField
 from std_msgs.msg import Bool, Float64, Float64MultiArray, String
 from visualization_msgs.msg import Marker, MarkerArray
 
+
 class RealSenseInterface:
-    def __init__(self, record_goal_pose=False):
+    def __init__(self, node: Node):
+        self.node = node
 
         # Top Camera Data
         self.camera_lock = Lock()
@@ -32,48 +37,49 @@ class RealSenseInterface:
         self.bridge = CvBridge()
 
         self.tf_buffer_lock = Lock()
-        self.tfBuffer = tf2_ros.Buffer()  # Using default cache time of 10 secs
-        self.listener = tf2_ros.TransformListener(self.tfBuffer)
+        self.tf_buffer = tf2_ros.Buffer()
+        self.listener = tf2_ros.TransformListener(self.tf_buffer, self.node)
 
-        self.broadcaster = tf2_ros.TransformBroadcaster()
+        self.broadcaster = tf2_ros.TransformBroadcaster(self.node)
 
         queue_size = 1000
+        qos_depth = 10
+
         self.color_image_sub = message_filters.Subscriber(
-            "/camera/color/image_raw",
+            self.node,
             Image,
-            queue_size=queue_size,
-            buff_size=65536 * queue_size,
+            "/camera/wrist/color/image_raw",
+            qos_profile=qos_depth,
         )
         self.camera_info_sub = message_filters.Subscriber(
-            "/camera/color/camera_info",
+            self.node,
             CameraInfo,
-            queue_size=queue_size,
-            buff_size=65536 * queue_size,
+            "/camera/wrist/color/camera_info",
+            qos_profile=qos_depth,
         )
         self.depth_image_sub = message_filters.Subscriber(
-            "/camera/aligned_depth_to_color/image_raw",
+            self.node,
             Image,
-            queue_size=queue_size,
-            buff_size=65536 * queue_size,
+            "/camera/wrist/depth/image_rect",
+            qos_profile=qos_depth,
         )
-        ts_top = message_filters.TimeSynchronizer(
+
+        self.ts_top = message_filters.TimeSynchronizer(
             [self.color_image_sub, self.camera_info_sub, self.depth_image_sub],
             queue_size=queue_size,
         )
-        ts_top.registerCallback(self.rgbdCallback)
-        ts_top.enable_reset = True
+        self.ts_top.registerCallback(self.rgbd_callback)
 
-        time.sleep(2.0) # sleep until all subscribers are registered
+        time.sleep(2.0)  # sleep until all subscribers are registered
 
-    def rgbdCallback(self, rgb_image_msg, camera_info_msg, depth_image_msg):
-        # print("RGB Callback")
-
+    def rgbd_callback(self, rgb_image_msg, camera_info_msg, depth_image_msg):
         try:
-            # Convert your ROS Image message to OpenCV2
+            # Convert ROS Image messages to OpenCV images
             rgb_image = self.bridge.imgmsg_to_cv2(rgb_image_msg, "bgr8")
             depth_image = self.bridge.imgmsg_to_cv2(depth_image_msg, "32FC1")
         except CvBridgeError as e:
-            print(e)
+            self.node.get_logger().error(f"CvBridge error: {e}")
+            return
 
         with self.camera_lock:
             self.camera_color_data = rgb_image
@@ -95,24 +101,59 @@ class RealSenseInterface:
             camera_info_data = deepcopy(self.camera_info_data)
             if camera_info_data is None:
                 return None
-        target_frame = "camera_color_optical_frame"
-        stamp = camera_info_data.header.stamp
+
+        target_frame = "camera_wrist_color_optical_frame"
+        stamp = Time.from_msg(camera_info_data.header.stamp)
+
         try:
             with self.tf_buffer_lock:
-                transform = self.tfBuffer.lookup_transform(
+                transform = self.tf_buffer.lookup_transform(
                     "base_link",
                     target_frame,
-                    rospy.Time(secs=stamp.secs, nsecs=stamp.nsecs),
+                    stamp,
                 )
-                T = np.zeros((4,4))
-                T[:3,:3] = Rotation.from_quat([transform.transform.rotation.x, transform.transform.rotation.y, transform.transform.rotation.z, transform.transform.rotation.w]).as_matrix()
-                T[:3,3] = np.array([transform.transform.translation.x, transform.transform.translation.y, transform.transform.translation.z]).reshape(1,3)
-                T[3,3] = 1
-                return T
+
+            T = np.zeros((4, 4))
+            T[:3, :3] = Rotation.from_quat(
+                [
+                    transform.transform.rotation.x,
+                    transform.transform.rotation.y,
+                    transform.transform.rotation.z,
+                    transform.transform.rotation.w,
+                ]
+            ).as_matrix()
+            T[:3, 3] = np.array(
+                [
+                    transform.transform.translation.x,
+                    transform.transform.translation.y,
+                    transform.transform.translation.z,
+                ]
+            )
+            T[3, 3] = 1.0
+            return T
+
         except (
             tf2_ros.LookupException,
             tf2_ros.ConnectivityException,
             tf2_ros.ExtrapolationException,
+            tf2_ros.TransformException,
         ):
-            # print("Exception finding transform between base_link and", target_frame)
             return None
+        
+def main(args=None):
+    rclpy.init(args=args)
+    node = Node("realsense_interface_node")
+
+    interface = RealSenseInterface(node)
+    camera_data = interface.get_camera_data()
+    base_to_camera = interface.get_base_to_camera_transform()
+
+    try:
+        rclpy.spin(node)
+    finally:
+        node.destroy_node()
+        rclpy.shutdown()
+
+
+if __name__ == "__main__":
+    main()

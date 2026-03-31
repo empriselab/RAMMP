@@ -1,138 +1,299 @@
-'''
-Entrypoint for controlling the robot arm on compute machine. Additionally runs two important threads:
-1. A thread that checks no safety anomalies have occurred using the watchdog
-2. A thread that publishes joint states to ROS
-'''
+#!/usr/bin/env python3
 
-import threading
+"""
+ROS 2 Humble arm client for Cornell position control.
+
+Supported commands:
+- JointCommand           -> publishes to /arm/cornell/joint_position
+- CartesianCommand       -> publishes to /arm/cornell/cartesian_pose
+- OpenGripperCommand     -> calls /arm/open_gripper
+- CloseGripperCommand    -> calls /arm/close_gripper
+
+Notes:
+- This version does NOT inherit from Node.
+- A parent ROS 2 node must be passed in and spun by the application.
+- Cornell position commands are only accepted by the arm control node in
+  ORDER_DRINK and DRINKING modes.
+"""
+
+from typing import Optional
 import time
-import numpy as np
 
-try:
-    import rospy
-    from sensor_msgs.msg import JointState
-    from std_msgs.msg import Bool
-    from geometry_msgs.msg import Pose
-    # from netft_rdt_driver.srv import String_cmd
-    ROSPY_IMPORTED = True
-except ModuleNotFoundError as e:
-    # print(f"ROS not imported: {e}")
-    ROSPY_IMPORTED = False
+from rclpy.node import Node
+from sensor_msgs.msg import JointState
+from geometry_msgs.msg import PoseStamped
+from std_srvs.srv import Trigger
+from pybullet_helpers.geometry import Pose
 
-from rammp.control.robot_controller.arm_interface import ArmInterface, ArmManager, NUC_HOSTNAME, ARM_RPC_PORT, RPC_AUTHKEY
-from rammp.control.robot_controller.command_interface import KinovaCommand, JointTrajectoryCommand, JointCommand, CartesianCommand, OpenGripperCommand, CloseGripperCommand
-# from rammp.safety.watchdog import WATCHDOG_MONITOR_FREQUENCY, PeekableQueue
+from rammp.control.robot_controller.command_interface import (
+    KinovaCommand,
+    JointCommand,
+    CartesianCommand,
+    OpenGripperCommand,
+    CloseGripperCommand,
+)
+
 
 class ArmInterfaceClient:
-    def __init__(self):
+    def __init__(self, node: Node) -> None:
+        self.node = node
 
-        assert ROSPY_IMPORTED, "ROS is required to run on the real robot"
+        self.joint_pub = self.node.create_publisher(
+            JointState,
+            "/arm/cornell/joint_position",
+            10,
+        )
 
-        # make sure watchdog is running
-        print("Waiting for Watchdog status...")
-        rospy.wait_for_message("/watchdog_status", Bool)
-        print("Watchdog is running, continuing...")
+        self.cartesian_pub = self.node.create_publisher(
+            PoseStamped,
+            "/arm/cornell/cartesian_pose",
+            10,
+        )
 
-        # Register ArmInterface (no lambda needed on the client-side)
-        ArmManager.register("ArmInterface")
+        self.open_gripper_client = self.node.create_client(
+            Trigger,
+            "/arm/open_gripper",
+        )
 
-        # Client setup
-        self.manager = ArmManager(address=(NUC_HOSTNAME, ARM_RPC_PORT), authkey=RPC_AUTHKEY)
-        self.manager.connect()
+        self.close_gripper_client = self.node.create_client(
+            Trigger,
+            "/arm/close_gripper",
+        )
 
-        # This will now use the single, shared instance of ArmInterface
-        self._arm_interface = self.manager.ArmInterface()
+        # State cache
+        self._latest_joint_state: Optional[JointState] = None
+        self._latest_ee_pose: Optional[Pose] = None
 
-    def get_state(self):
-        return self._arm_interface.get_state()
-    
-    def get_speed(self):
-        return self._arm_interface.get_speed()
-    
-    def set_speed(self, speed: str):
-        assert speed in ["low", "medium", "high"], "Speed must be one of 'low', 'medium', 'high'"
-        self._arm_interface.set_speed(speed)
-        time.sleep(1.0) # Make sure the arm has time to change speed
+        # State subscribers
+        self.joint_state_sub = self.node.create_subscription(
+            JointState,
+            "/arm/joint_states",
+            self._joint_state_callback,
+            10,
+        )
 
-    def set_tool(self, tool: str):
-        self._arm_interface.set_tool(tool)
+        self.ee_pose_sub = self.node.create_subscription(
+            PoseStamped,
+            "/arm/ee_pose",
+            self._ee_pose_callback,
+            10,
+        )
 
-    def execute_command(self, cmd: KinovaCommand) -> None:
+    def _joint_state_callback(self, msg: JointState) -> None:
+        self._latest_joint_state = msg
 
-        if cmd.__class__.__name__ == "JointTrajectoryCommand":
-            return self._arm_interface.set_joint_trajectory(cmd.traj)
+    def _ee_pose_callback(self, msg: PoseStamped) -> None:
+        self._latest_ee_pose = Pose(
+            position=(
+                float(msg.pose.position.x),
+                float(msg.pose.position.y),
+                float(msg.pose.position.z),
+            ),
+            orientation=(
+                float(msg.pose.orientation.x),
+                float(msg.pose.orientation.y),
+                float(msg.pose.orientation.z),
+                float(msg.pose.orientation.w),
+            ),
+        )
 
-        if cmd.__class__.__name__ == "JointCommand":
-            joint_command_pos = cmd.pos
-            if isinstance(joint_command_pos, np.ndarray):
-                joint_command_pos = joint_command_pos.tolist()  # Convert to a list if it's a NumPy array
-            return self._arm_interface.set_joint_position(joint_command_pos)
+    def wait_until_ready(self, timeout_sec: float = 5.0) -> None:
+        if not self.open_gripper_client.wait_for_service(timeout_sec=timeout_sec):
+            self.node.get_logger().warn("/arm/open_gripper not available yet")
 
-        if cmd.__class__.__name__ == "CartesianCommand":
-            return self._arm_interface.set_ee_pose(cmd.pos, cmd.quat)
+        if not self.close_gripper_client.wait_for_service(timeout_sec=timeout_sec):
+            self.node.get_logger().warn("/arm/close_gripper not available yet")
 
-        if cmd.__class__.__name__ == "OpenGripperCommand":
-            return self._arm_interface.open_gripper()
+        start_time = time.time()
+        while time.time() - start_time <= timeout_sec:
+            if self._latest_joint_state is not None:
+                return
+            time.sleep(0.05)
 
-        if cmd.__class__.__name__ == "CloseGripperCommand":
-            return self._arm_interface.close_gripper()
+        self.node.get_logger().warn("/arm/joint_states not available yet")
+
+    def get_state(self) -> dict[str, Optional[object]]:
+        return {
+            "joint_state": self._latest_joint_state,
+            "ee_pose": self._latest_ee_pose,
+        }
+
+    def execute_command(self, cmd: KinovaCommand) -> bool:
+        if isinstance(cmd, JointCommand):
+            return self._send_joint_command(cmd)
+
+        if isinstance(cmd, CartesianCommand):
+            return self._send_cartesian_command(cmd)
+
+        if isinstance(cmd, OpenGripperCommand):
+            return self._call_trigger(self.open_gripper_client, "/arm/open_gripper")
+
+        if isinstance(cmd, CloseGripperCommand):
+            return self._call_trigger(self.close_gripper_client, "/arm/close_gripper")
 
         raise NotImplementedError(f"Unrecognized command: {cmd}")
 
-if __name__ == "__main__":
+    def _send_joint_command(
+        self,
+        cmd: JointCommand,
+        timeout_sec: float = 15.0,
+        position_tolerance: float = 0.02,
+    ) -> bool:
+        if len(cmd.pos) == 0:
+            raise ValueError("JointCommand.pos cannot be empty")
 
-    rospy.init_node("arm_interface_client", anonymous=True)
-    arm_client_interface = ArmInterfaceClient()
-    print("Current State:", arm_client_interface.get_state())
+        target = [float(x) for x in cmd.pos]
 
-    run_commands = input("Press 'y' to run commands")
+        msg = JointState()
+        msg.header.stamp = self.node.get_clock().now().to_msg()
+        msg.position = target
 
-    if run_commands != "y":
-        exit()
+        self.joint_pub.publish(msg)
+        self.node.get_logger().info(
+            f"Published JointCommand with {len(target)} joints"
+        )
 
-    # input("Press enter to close gripper...")
-    # arm_client_interface.execute_command(CloseGripperCommand())
+        start_time = time.time()
 
-    # input("Press enter to continue to outside handle pose...")
-    # outside_handle_pose = [-0.2942967116832733, -0.125764569640159607, 0.07549066483974457, 0.03666796462650288, 0.7174768545096796, 0.6954346334072048, 0.01590893682281142]
-    # arm_client_interface.execute_command(CartesianCommand(pos=outside_handle_pose[:3], quat=outside_handle_pose[3:]))
+        while time.time() - start_time <= timeout_sec:
+            joint_state = self._latest_joint_state
 
-    # input("Press enter to continue to below handle pose...")
-    # below_handle_pose = [-0.2942967116832733, -0.025764569640159607, 0.07549066483974457, 0.03666796462650288, 0.7174768545096796, 0.6954346334072048, 0.01590893682281142]
-    # arm_client_interface.execute_command(CartesianCommand(pos=below_handle_pose[:3], quat=below_handle_pose[3:]))
+            if joint_state is not None and self._joint_goal_reached(
+                joint_state=joint_state,
+                target=target,
+                tolerance=position_tolerance,
+            ):
+                self.node.get_logger().info(
+                    f"JointCommand reached goal within tolerance {position_tolerance}"
+                )
+                return True
 
-    input("Press enter to continue to inside handle pose...")
-    inside_handle_pose = [-0.2942967116832733, -0.025764569640159607, 0.11549066483974457, 0.03666796462650288, 0.7174768545096796, 0.6954346334072048, 0.01590893682281142]
-    arm_client_interface.execute_command(CartesianCommand(pos=inside_handle_pose[:3], quat=inside_handle_pose[3:]))
+            time.sleep(0.05)
 
-    # input("Press enter to open gripper on handle...")
-    # arm_client_interface.execute_command(OpenGripperCommand())
+        self.node.get_logger().warn("Timed out waiting for JointCommand to reach goal")
+        return False
 
-    input("Press enter to continue to above handle pose...")
-    above_handle_pose = [-0.2842967116832733, -0.017764569640159607, 0.22549066483974457, 0.03666796462650288, 0.7174768545096796, 0.6954346334072048, 0.01590893682281142]
-    arm_client_interface.execute_command(CartesianCommand(pos=above_handle_pose[:3], quat=above_handle_pose[3:]))
+    def _send_cartesian_command(
+        self,
+        cmd: CartesianCommand,
+        timeout_sec: float = 15.0,
+        pose_tolerance: float = 0.01,
+    ) -> bool:
+        if len(cmd.pos) != 3:
+            raise ValueError("CartesianCommand.pos must have length 3: [x, y, z]")
+        if len(cmd.quat) != 4:
+            raise ValueError(
+                "CartesianCommand.quat must have length 4: [qx, qy, qz, qw]"
+            )
 
-    # outside_handle_pose = [-0.30510666489601135, -0.123085628747940063, 0.0562610810995102, 0.02322167404813943, 0.7180926934794382, 0.6955542280407613, 0.0028201561070785135]
-    # arm_client_interface.execute_command(CartesianCommand(pos=outside_handle_pose[:3], quat=outside_handle_pose[3:]))
+        target_pose = Pose(
+            position=(
+                float(cmd.pos[0]),
+                float(cmd.pos[1]),
+                float(cmd.pos[2]),
+            ),
+            orientation=(
+                float(cmd.quat[0]),
+                float(cmd.quat[1]),
+                float(cmd.quat[2]),
+                float(cmd.quat[3]),
+            ),
+        )
 
-    # above_inside_handle_pose = [-0.31010666489601135, -0.018085628747940063, 0.1062610810995102, 0.02322167404813943, 0.7180926934794382, 0.6955542280407613, 0.0028201561070785135]
-    # arm_client_interface.execute_command(CartesianCommand(pos=above_inside_handle_pose[:3], quat=above_inside_handle_pose[3:]))
+        msg = PoseStamped()
+        msg.header.stamp = self.node.get_clock().now().to_msg()
+        msg.header.frame_id = "base_link"
 
-    # outside_handle_pose = [-0.31010666489601135, -0.118085628747940063, 0.1062610810995102, 0.02322167404813943, 0.7180926934794382, 0.6955542280407613, 0.0028201561070785135]
-    # arm_client_interface.execute_command(CartesianCommand(pos=outside_handle_pose[:3], quat=outside_handle_pose[3:]))
+        msg.pose.position.x = target_pose.position[0]
+        msg.pose.position.y = target_pose.position[1]
+        msg.pose.position.z = target_pose.position[2]
 
+        msg.pose.orientation.x = target_pose.orientation[0]
+        msg.pose.orientation.y = target_pose.orientation[1]
+        msg.pose.orientation.z = target_pose.orientation[2]
+        msg.pose.orientation.w = target_pose.orientation[3]
 
-    # retract_pos = [0.0, -0.34903602299465675, -3.141591055693139, -2.0, 0.0, -0.872688061814757, 1.57075917569769]
-    # arm_client_interface.execute_command(JointCommand(retract_pos))
+        self.cartesian_pub.publish(msg)
+        self.node.get_logger().info("Published CartesianCommand")
 
-    # home_pos = [0.0, 0.26191187306569164, -3.1415742777782714, -2.269018308753582, -1.1185276577840852e-05, 0.9598948696060562, 1.5707649014940337]
-    # arm_client_interface.execute_command(JointCommand(home_pos))
+        start_time = time.time()
 
-    # # midpoint_pos = [2.2912525080624357, 0.730991513381838, 2.0830126187361424, -2.1737367965371632, 0.28532185799581516, -0.4648462461578422, -0.29495787389950756]
-    # # arm_client_interface.execute_command(JointCommand(midpoint_pos))
+        while time.time() - start_time <= timeout_sec:
+            ee_pose = self._latest_ee_pose
 
-    # before_transfer_pos = [-2.86554642, -1.61951779, -2.60986085, -1.37302839, 1.11779249, -1.18028264, 2.05515862]
-    # arm_client_interface.execute_command(JointCommand(before_transfer_pos))
+            if ee_pose is not None and self._cartesian_goal_reached(
+                current_pose=ee_pose,
+                target_pose=target_pose,
+                atol=pose_tolerance,
+            ):
+                self.node.get_logger().info(
+                    f"CartesianCommand reached goal within tolerance {pose_tolerance}"
+                )
+                return True
 
-    # # drink_gaze_pos = [-0.004187021865822871, 0.6034579885210962, -3.1259047705564633, -2.3538005746884725, 0.01149092320739253, 1.3411586039000891, 1.6825233913747728]
-    # # arm_client_interface.execute_command(JointCommand(drink_gaze_pos))
+            time.sleep(0.05)
+
+        self.node.get_logger().warn(
+            "Timed out waiting for CartesianCommand to reach goal"
+        )
+        return False
+
+    def _joint_goal_reached(
+        self,
+        joint_state: JointState,
+        target: list[float],
+        tolerance: float,
+    ) -> bool:
+        if len(joint_state.position) < len(target):
+            return False
+
+        current = list(joint_state.position[: len(target)])
+        max_err = max(abs(c - t) for c, t in zip(current, target))
+        return max_err <= tolerance
+
+    def _cartesian_goal_reached(
+        self,
+        current_pose: Pose,
+        target_pose: Pose,
+        atol: float,
+    ) -> bool:
+        return current_pose.allclose(target_pose, atol=atol)
+
+    def _call_trigger(
+        self,
+        client,
+        service_name: str,
+        timeout_sec: float = 5.0,
+    ) -> bool:
+        if not client.wait_for_service(timeout_sec=timeout_sec):
+            self.node.get_logger().error(f"Service {service_name} not available")
+            return False
+
+        request = Trigger.Request()
+        future = client.call_async(request)
+
+        start_time = time.time()
+        while time.time() - start_time <= timeout_sec:
+            if future.done():
+                break
+            time.sleep(0.05)
+
+        if not future.done():
+            self.node.get_logger().error(f"Timed out calling {service_name}")
+            return False
+
+        response = future.result()
+        if response is None:
+            self.node.get_logger().error(f"No response from {service_name}")
+            return False
+
+        if response.success:
+            self.node.get_logger().info(
+                f"{service_name} succeeded: {response.message}"
+            )
+        else:
+            self.node.get_logger().warn(
+                f"{service_name} failed: {response.message}"
+            )
+
+        return bool(response.success)

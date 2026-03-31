@@ -1,68 +1,35 @@
-cmake_minimum_required(VERSION 3.0.2)
+cmake_minimum_required(VERSION 3.8)
 project(drink_actions_test)
 
-## Compile as C++11, supported in ROS Kinetic and newer
-add_compile_options(-std=c++11)
+if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+  add_compile_options(-Wall -Wextra -Wpedantic)
+endif()
 
-find_package(catkin REQUIRED COMPONENTS
-  actionlib
-  actionlib_msgs
-  message_generation
-  rospy
-  std_msgs
+find_package(ament_cmake REQUIRED)
+find_package(rosidl_default_generators REQUIRED)
+find_package(std_msgs REQUIRED)
+
+rosidl_generate_interfaces(${PROJECT_NAME}
+  "action/DrinkAction.action"
+  DEPENDENCIES std_msgs
 )
 
-################################################
-## Declare ROS messages, services and actions ##
-################################################
-
-add_action_files(
-  DIRECTORY action
-  FILES
-  DrinkAction.action
-)
-
-generate_messages(
-  DEPENDENCIES
-    actionlib_msgs
-    std_msgs
-)
-
-###################################
-## catkin specific configuration ##
-###################################
-
-catkin_package(
-  CATKIN_DEPENDS
-    actionlib
-    actionlib_msgs
-    message_runtime
-    rospy
-    std_msgs
-)
-
-###########
-## Build ##
-###########
-
-include_directories(
-  ${catkin_INCLUDE_DIRS}
-)
-
-#############
-## Install ##
-#############
-
-catkin_install_python(PROGRAMS
+install(PROGRAMS
   src/rammp/integration/drink_action_server.py
   src/rammp/integration/drink_action_client.py
-  DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
+  DESTINATION lib/${PROJECT_NAME}
 )
 
-#############
-## Testing ##
-#############
+install(DIRECTORY
+  launch
+  DESTINATION share/${PROJECT_NAME}
+)
 
-if(CATKIN_ENABLE_TESTING)
-  find_package(rostest REQUIRED)
-endif()
+install(DIRECTORY
+  config
+  DESTINATION share/${PROJECT_NAME}
+)
+
+ament_export_dependencies(rosidl_default_runtime)
+
+ament_package()

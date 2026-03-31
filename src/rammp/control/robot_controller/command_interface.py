@@ -7,19 +7,6 @@ from numpy.typing import NDArray
 class KinovaCommand:
     """Establish an interface for commands that can be sent to the robot."""
 
-
-@dataclass(frozen=True)
-class JointTrajectoryCommand(KinovaCommand):
-    """Command to follow an joint trajectory."""
-
-    traj: list[NDArray]
-
-    def __init__(self, traj):
-        object.__setattr__(self, "traj", [np.array(x) for x in traj])
-        num_dof = 7
-        assert all(x.shape == (num_dof,) for x in self.traj)
-
-
 @dataclass(frozen=True)
 class JointCommand(KinovaCommand):
     """Command to set the joint positions."""
