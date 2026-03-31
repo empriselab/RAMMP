@@ -8,17 +8,12 @@ from pybullet_helpers.geometry import Pose
 from pybullet_helpers.joint import JointPositions
 from scipy.spatial.transform import Rotation as R
 
-try:
-    import rospy
-    from sensor_msgs.msg import JointState
-    from std_msgs.msg import String
-    from visualization_msgs.msg import MarkerArray, Marker
-    import tf2_ros
-    from geometry_msgs.msg import TransformStamped, Pose as PoseMsg
-    ROSPY_IMPORTED = True
-except ModuleNotFoundError as e:
-    # print(f"ROS not imported: {e}")
-    ROSPY_IMPORTED = False
+import rospy
+from sensor_msgs.msg import JointState
+from std_msgs.msg import String
+from visualization_msgs.msg import MarkerArray, Marker
+import tf2_ros
+from geometry_msgs.msg import TransformStamped, Pose as PoseMsg
 
 from rammp.simulation.scene_description import SceneDescription
 
@@ -26,8 +21,6 @@ class RVizInterface:
     """An interface for visualization on rviz"""
 
     def __init__(self, scene_description: SceneDescription) -> None:
-
-        assert ROSPY_IMPORTED, "ROS is required to run RVizInterface"
 
         self._scene_description = scene_description
 

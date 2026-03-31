@@ -18,11 +18,9 @@ def mouth_open(perception_interface, termination_event, timeout):
 
         start_time = time.time()
         while time.time() - start_time < timeout and (termination_event is None or not termination_event.is_set()):
-            head_perception_data = perception_interface.get_head_perception_data()
+            head_perception_data = perception_interface.run_head_perception()
             if head_perception_data is None:
                 continue
-            else:
-                time.sleep(0.1) # Maintain 10 Hz rate
             face_keypoints = head_perception_data["face_keypoints"]
             
             # Indices for mouth landmarks
@@ -42,37 +40,3 @@ def mouth_open(perception_interface, termination_event, timeout):
         return False
 
     return gesture_detector(perception_interface, termination_event, timeout, threshold)
-
-def head_nod(perception_interface, termination_event, timeout):
-    head_nod_threshold = 15.0
-    required_direction_changes = 3
-
-    start_time = time.time()
-    direction_changes = 0
-    last_min_extreme = float("inf")
-    last_max_extreme = -float("inf")
-
-    while (time.time() - start_time < timeout and (termination_event is None or not termination_event.is_set())):
-        head_perception_data = perception_interface.get_head_perception_data()
-        if head_perception_data is None:
-            continue
-        else:
-            time.sleep(0.1) # Maintain 10 Hz rate
-        head_pose = head_perception_data["head_pose"]
-        (_, _, _, _, head_pitch, _) = head_pose
-
-        if head_pitch - last_min_extreme > head_nod_threshold:
-            direction_changes += 1
-            last_min_extreme = float("inf")
-
-        if last_max_extreme - head_pitch > head_nod_threshold:
-            direction_changes += 1
-            last_max_extreme = -float("inf")
-
-        last_min_extreme = min(head_pitch, last_min_extreme)
-        last_max_extreme = max(head_pitch, last_max_extreme)
-
-        if direction_changes >= required_direction_changes:
-            return True
-
-    return False

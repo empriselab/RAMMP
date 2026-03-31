@@ -1,4 +1,0 @@
-Starting node: PickDrink
-Finished executing node: PickDrink
-Starting node: StowDrink
-Finished executing node: StowDrink

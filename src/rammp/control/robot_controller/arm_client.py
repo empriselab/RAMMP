@@ -23,8 +23,6 @@ from rammp.control.robot_controller.arm_interface import ArmInterface, ArmManage
 from rammp.control.robot_controller.command_interface import KinovaCommand, JointTrajectoryCommand, JointCommand, CartesianCommand, OpenGripperCommand, CloseGripperCommand
 # from rammp.safety.watchdog import WATCHDOG_MONITOR_FREQUENCY, PeekableQueue
 
-from rammp.control.robot_controller.maintain_home_orientation import MaintainHomeOrientation
-
 class ArmInterfaceClient:
     def __init__(self):
 
@@ -44,14 +42,6 @@ class ArmInterfaceClient:
 
         # This will now use the single, shared instance of ArmInterface
         self._arm_interface = self.manager.ArmInterface()
-
-        self.maintain_home_orientation = MaintainHomeOrientation(self._arm_interface)
-
-    def start_maintain_home_orientation(self):
-        self.maintain_home_orientation.start()
-
-    def stop_maintain_home_orientation(self):
-        self.maintain_home_orientation.stop()
 
     def get_state(self):
         return self._arm_interface.get_state()
@@ -131,9 +121,6 @@ if __name__ == "__main__":
     # outside_handle_pose = [-0.31010666489601135, -0.118085628747940063, 0.1062610810995102, 0.02322167404813943, 0.7180926934794382, 0.6955542280407613, 0.0028201561070785135]
     # arm_client_interface.execute_command(CartesianCommand(pos=outside_handle_pose[:3], quat=outside_handle_pose[3:]))
 
-    # arm_client_interface.start_maintain_home_orientation()
-    # input("Press enter to stop maintaining home orientation...")
-    # arm_client_interface.stop_maintain_home_orientation()
 
     # retract_pos = [0.0, -0.34903602299465675, -3.141591055693139, -2.0, 0.0, -0.872688061814757, 1.57075917569769]
     # arm_client_interface.execute_command(JointCommand(retract_pos))

@@ -1,0 +1,11 @@
+# Goal
+string request_id
+
+---
+# Result
+bool success
+string message
+
+---
+# Feedback
+string state
