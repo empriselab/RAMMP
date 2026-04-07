@@ -80,6 +80,33 @@ Then reload:
 
 ---
 
+### 10. Download DECA model files (robot mode only)
+
+DECA head perception requires model files not included in the repository.
+
+**Download GitHub-sourced files:**
+
+    cd src/rammp/perception/head_perception/DECA/data
+    wget https://github.com/YadiraF/DECA/raw/master/data/landmark_embedding.npy
+    wget https://github.com/YadiraF/DECA/raw/master/data/head_template.obj
+    wget https://github.com/YadiraF/DECA/raw/master/data/texture_data_256.npy
+    wget https://github.com/YadiraF/DECA/raw/master/data/fixed_displacement_256.npy
+    wget https://github.com/YadiraF/DECA/raw/master/data/uv_face_mask.png
+    wget https://github.com/YadiraF/DECA/raw/master/data/uv_face_eye_mask.png
+    wget https://github.com/YadiraF/DECA/raw/master/data/mean_texture.jpg
+
+**`generic_model.pkl`:** Register at [flame.is.tue.mpg.de](https://flame.is.tue.mpg.de), run the provided `fetch_data.sh`, then move the file:
+
+    mv data/FLAME2020/FLAME2020/generic_model.pkl data/
+
+**`deca_model.tar`:** Download from [Google Drive](https://drive.google.com/file/d/1rp8kdyLPvErw2dTmqtjISRVvQLj6Yzje). Despite the extension it is a PyTorch checkpoint — do **not** extract it, just place it in `data/`.
+
+**`resnet50_ft_weight.pkl`:** Download separately (face recognition model) and place in `data/`.
+
+> **NumPy / chumpy compatibility:** The FLAME model was serialized with `chumpy`, which does not support NumPy >= 1.24. If you encounter `ImportError: cannot import name 'bool' from 'numpy'`, patch `chumpy/__init__.py` by replacing the offending import line with Python builtins equivalents.
+
+---
+
 ## Running
 
     ros2 launch drink_actions_test real.launch.py
