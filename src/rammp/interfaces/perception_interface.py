@@ -24,8 +24,13 @@ class PerceptionInterface:
             self.realsense_interface = RealSenseInterface(self.node)
 
             self._head_perception = HeadPerception()
-            # Warm start head perception
+            # Warm start head perception — wait until camera data is available
             self._head_perception.set_tool("drink")
+            self.node.get_logger().info("Waiting for camera data before warm-starting head perception...")
+            while self.realsense_interface.get_camera_data()["rgb_image"] is None:
+                import time
+                time.sleep(0.1)
+            self.node.get_logger().info("Camera data received, warm-starting head perception.")
             for _ in range(10):
                 self.run_head_perception()
 

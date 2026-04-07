@@ -17,7 +17,6 @@ from geometry_msgs.msg import Point, TransformStamped, WrenchStamped
 from rclpy.node import Node
 from rclpy.time import Time
 from scipy.spatial.transform import Rotation
-from sensor_msgs import point_cloud2
 from sensor_msgs.msg import CameraInfo, Image, PointCloud2, PointField
 from std_msgs.msg import Bool, Float64, Float64MultiArray, String
 from visualization_msgs.msg import Marker, MarkerArray
@@ -43,25 +42,30 @@ class RealSenseInterface:
         self.broadcaster = tf2_ros.TransformBroadcaster(self.node)
 
         queue_size = 1000
-        qos_depth = 10
+        from rclpy.qos import QoSProfile, QoSHistoryPolicy, QoSReliabilityPolicy
+        qos_profile = QoSProfile(
+            depth=10,
+            history=QoSHistoryPolicy.KEEP_LAST,
+            reliability=QoSReliabilityPolicy.BEST_EFFORT,
+        )
 
         self.color_image_sub = message_filters.Subscriber(
             self.node,
             Image,
             "/camera/wrist/color/image_raw",
-            qos_profile=qos_depth,
+            qos_profile=qos_profile,
         )
         self.camera_info_sub = message_filters.Subscriber(
             self.node,
             CameraInfo,
             "/camera/wrist/color/camera_info",
-            qos_profile=qos_depth,
+            qos_profile=qos_profile,
         )
         self.depth_image_sub = message_filters.Subscriber(
             self.node,
             Image,
             "/camera/wrist/depth/image_rect",
-            qos_profile=qos_depth,
+            qos_profile=qos_profile,
         )
 
         self.ts_top = message_filters.TimeSynchronizer(

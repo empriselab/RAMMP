@@ -99,10 +99,10 @@ class ArmInterfaceClient:
 
     def wait_until_ready(self, timeout_sec: float = 5.0) -> None:
         if not self.open_gripper_client.wait_for_service(timeout_sec=timeout_sec):
-            self.node.get_logger().warn("/arm/open_gripper not available yet")
+            self.node.get_logger().warning("/arm/open_gripper not available yet")
 
         if not self.close_gripper_client.wait_for_service(timeout_sec=timeout_sec):
-            self.node.get_logger().warn("/arm/close_gripper not available yet")
+            self.node.get_logger().warning("/arm/close_gripper not available yet")
 
         start_time = time.time()
         while time.time() - start_time <= timeout_sec:
@@ -110,7 +110,7 @@ class ArmInterfaceClient:
                 return
             time.sleep(0.05)
 
-        self.node.get_logger().warn("/arm/joint_states not available yet")
+        self.node.get_logger().warning("/arm/joint_states not available yet")
 
     def get_state(self) -> dict[str, Optional[object]]:
         return {
@@ -170,7 +170,7 @@ class ArmInterfaceClient:
 
             time.sleep(0.05)
 
-        self.node.get_logger().warn("Timed out waiting for JointCommand to reach goal")
+        self.node.get_logger().warning("Timed out waiting for JointCommand to reach goal")
         return False
 
     def _send_cartesian_command(
@@ -233,7 +233,7 @@ class ArmInterfaceClient:
 
             time.sleep(0.05)
 
-        self.node.get_logger().warn(
+        self.node.get_logger().warning(
             "Timed out waiting for CartesianCommand to reach goal"
         )
         return False
@@ -292,7 +292,7 @@ class ArmInterfaceClient:
                 f"{service_name} succeeded: {response.message}"
             )
         else:
-            self.node.get_logger().warn(
+            self.node.get_logger().warning(
                 f"{service_name} failed: {response.message}"
             )
 

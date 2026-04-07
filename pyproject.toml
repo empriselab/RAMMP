@@ -11,9 +11,7 @@ requires-python = ">=3.10"
 dependencies = [
     "multiprocess",
     "pyyaml",
-    "rospkg",
-    "catkin_pkg",
-    "empy",
+"empy",
     "paramiko",
     "PyAudio",
 ]
@@ -66,6 +64,7 @@ where = ["src"]
 
 [tool.setuptools.package-data]
 pybullet_helpers = ["py.typed"]
+rammp = ["simulation/configs/*.yaml"]
 
 [tool.black]
 line-length = 88

@@ -14,6 +14,8 @@ from rammp.interfaces.perception_interface import PerceptionInterface
 from rammp.interfaces.rviz_interface import RVizInterface
 from rammp.control.robot_controller.arm_client import ArmInterfaceClient
 from rammp.simulation.scene_description import create_scene_description_from_config
+import rammp
+import rammp.simulation.scene_description as _scene_description_mod
 from rammp.simulation.simulator import FeedingDeploymentPyBulletSimulator
 
 from rammp.actions.bring_cup_to_mouth import BringCupToMouthAction
@@ -33,12 +35,11 @@ class DrinkActionServers(Node):
     ):
         super().__init__("drink_action_server")
 
-        self.log_dir = Path(__file__).parent / "log"
+        self.log_dir = Path(rammp.__file__).parent / "integration" / "log"
 
         # Initialize the simulator.
         scene_config_path = (
-            Path(__file__).parent.parent
-            / "simulation"
+            Path(_scene_description_mod.__file__).parent
             / "configs"
             / f"{scene_config}.yaml"
         )
@@ -244,7 +245,7 @@ def main(args=None):
     parser.add_argument("--run_on_robot", action="store_true")
     parser.add_argument("--use_gui", action="store_true")
     parser.add_argument("--no_waits", action="store_true")
-    parsed_args = parser.parse_args()
+    parsed_args = parser.parse_args(rclpy.utilities.remove_ros_args(args=None)[1:])
 
     rclpy.init(args=args)
 
