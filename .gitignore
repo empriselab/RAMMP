@@ -1,2 +1,3 @@
 src/rammp/perception/head_perception/DECA/data/*
 __pycache__
+*.egg-info/
