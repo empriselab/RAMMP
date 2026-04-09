@@ -22,8 +22,10 @@ class PickupAndOrderAction(BaseAction):
         # Place an order
         self.move_to_joint_positions(self.sim.scene_description.home_pos)
         self.move_to_ee_pose(self.sim.scene_description.drink_handover_pose)
-        input("Press Enter to ungrasp drink")
-        # time.sleep(5.0) # Wait for 5 seconds to simulate waiting for the human to take the drink
-        self.ungrasp_tool("drink")
-        time.sleep(3.0) # Wait for 3 seconds after ungrasping
-        self.move_to_joint_positions(self.sim.scene_description.home_pos)
+        
+        # Note: FSM will handle below states
+        # input("Press Enter to ungrasp drink")
+        # # time.sleep(5.0) # Wait for 5 seconds to simulate waiting for the human to take the drink
+        # self.ungrasp_tool("drink")
+        # time.sleep(3.0) # Wait for 3 seconds after ungrasping
+        # self.move_to_joint_positions(self.sim.scene_description.home_pos)

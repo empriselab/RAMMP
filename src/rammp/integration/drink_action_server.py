@@ -8,6 +8,7 @@ from rclpy.action import ActionServer
 from rclpy.executors import MultiThreadedExecutor
 
 from drink_actions_test.action import DrinkAction
+from drink_actions_test.srv import PerceiveCup
 
 # Interfaces
 from rammp.interfaces.perception_interface import PerceptionInterface
@@ -21,6 +22,7 @@ from rammp.simulation.simulator import FeedingDeploymentPyBulletSimulator
 from rammp.actions.bring_cup_to_mouth import BringCupToMouthAction
 from rammp.actions.grab_cup_from_table import GrabCupFromTableAction
 from rammp.actions.home_cup import HomeCupAction
+from rammp.actions.locate_cup import LocateCup
 from rammp.actions.pickup_and_order import PickupAndOrderAction
 from rammp.actions.put_cup_back_to_holder import PutCupBackToHolderAction
 
@@ -70,6 +72,7 @@ class DrinkActionServers(Node):
             BringCupToMouthAction,
             GrabCupFromTableAction,
             HomeCupAction,
+            LocateCup,
             PickupAndOrderAction,
             PutCupBackToHolderAction,
         }
@@ -102,6 +105,19 @@ class DrinkActionServers(Node):
             self.execute_grab_cup_from_table,
         )
 
+        self.locate_cup_server = ActionServer(
+            self,
+            DrinkAction,
+            "/arm/drink/locate_cup",
+            self.execute_locate_cup,
+        )
+
+        self.perceive_cup_service = self.create_service(
+            PerceiveCup,
+            "/arm/drink/stream_cup_handle",
+            self.execute_perceive_cup,
+        )
+
         self.bring_cup_to_mouth_server = ActionServer(
             self,
             DrinkAction,
@@ -123,7 +139,7 @@ class DrinkActionServers(Node):
             self.execute_put_cup_back_to_holder,
         )
 
-        self.get_logger().info("All 5 drink action servers are up.")
+        self.get_logger().info("All drink action servers are up.")
 
     def _publish_dummy_feedback(self, goal_handle, state_text: str):
         feedback = DrinkAction.Feedback()
@@ -179,6 +195,44 @@ class DrinkActionServers(Node):
                 goal_handle,
                 f"grab_cup_from_table failed: {exc}",
             )
+
+    def execute_locate_cup(self, goal_handle):
+        self.get_logger().info(
+            f"locate_cup goal received: {goal_handle.request.request_id}"
+        )
+        self._publish_dummy_feedback(goal_handle, "starting locate_cup")
+        try:
+            self.hla_name_to_hla["LocateCup"].execute_action()
+            return self._finish_success(
+                goal_handle,
+                "locate_cup complete",
+            )
+        except Exception as exc:
+            self.get_logger().error(f"locate_cup failed: {exc}")
+            return self._finish_abort(
+                goal_handle,
+                f"locate_cup failed: {exc}",
+            )
+
+    def execute_perceive_cup(self, request, response):
+        self.get_logger().info(
+            f"perceive_cup request received: {request.request_id}"
+        )
+        try:
+            cup_info = self.perception_interface.perceive_cup_info()
+            if not cup_info.success:
+                response.success = False
+                response.message = "perceive_cup did not find a cup"
+                return response
+            response.success = True
+            response.message = "perceive_cup complete"
+            response.cup_info = cup_info
+            return response
+        except Exception as exc:
+            self.get_logger().error(f"perceive_cup failed: {exc}")
+            response.success = False
+            response.message = f"perceive_cup failed: {exc}"
+            return response
 
     def execute_bring_cup_to_mouth(self, goal_handle):
         self.get_logger().info(

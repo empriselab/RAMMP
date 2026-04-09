@@ -1,0 +1,7 @@
+# Request
+string request_id
+---
+# Response
+bool success
+string message
+CupInfo cup_info

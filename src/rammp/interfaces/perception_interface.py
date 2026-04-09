@@ -6,6 +6,7 @@ from scipy.spatial.transform import Rotation as R
 import pickle
 
 from rclpy.node import Node
+from drink_actions_test.msg import CupInfo
 
 from rammp.interfaces.realsense_interface import RealSenseInterface
 
@@ -41,6 +42,7 @@ class PerceptionInterface:
             self._drink_perception = None
 
         self.last_drink_poses = None
+        self.aruco_pose = None
 
     def run_head_perception(self, ):
         # print("Running Head Perception")
@@ -80,72 +82,117 @@ class PerceptionInterface:
         else:
             return None
 
-    def perceive_drink_pickup_poses(self):
+    def _get_drink_transform(self):
+        tf = np.zeros((4, 4))
+        tf[:3, :3] = R.from_euler("xyz", [0, 0, np.pi / 2]).as_matrix()
+        tf[:3, 3] = np.array([0.0, 0.0, 0.0])
+        tf[3, 3] = 1
+        return tf
 
-        def get_drink_transform():
-            tf = np.zeros((4, 4))
-            tf[:3, :3] = R.from_euler("xyz", [0, 0, np.pi / 2]).as_matrix()
-            tf[:3, 3] = np.array([0.0, 0.0, 0.0]) 
-            tf[3, 3] = 1
-            return tf
+    def _get_pre_grasp_transform(self):
+        tf = np.zeros((4, 4))
+        tf[:3, :3] = R.from_euler("xyz", [np.pi, 0, np.pi / 2]).as_matrix()
+        tf[:3, 3] = np.array([0.02, 0.01, 0.15])
+        tf[3, 3] = 1
+        return tf
 
-        def get_pre_grasp_transform():
-            tf = np.zeros((4, 4))
-            tf[:3, :3] = R.from_euler("xyz", [np.pi, 0, np.pi / 2]).as_matrix()
-            tf[:3, 3] = np.array([0.02, 0.01, 0.15]) 
-            tf[3, 3] = 1
-            return tf
+    def _get_inside_bottom_transform(self):
+        tf = self._get_pre_grasp_transform()
+        tf[2, 3] = 0.017
+        return tf
 
-        def get_inside_bottom_transform():
-            tf = get_pre_grasp_transform()
-            tf[2, 3] = 0.017
-            return tf
+    def _get_inside_top_transform(self):
+        tf = self._get_inside_bottom_transform()
+        tf[0, 3] = 0.043
+        return tf
 
-        def get_inside_top_transform():
-            tf = get_inside_bottom_transform()
-            tf[0, 3] = 0.043
-            return tf
-        
-        def get_post_grasp_pose():
-            tf = get_inside_top_transform()
-            tf[0, 3] = 0.233
-            return tf
-        
-        def get_place_inside_bottom_transform():
-            tf = get_inside_bottom_transform()
-            # tf[1, 3] = 0.0
-            return tf
+    def _get_post_grasp_pose(self):
+        tf = self._get_inside_top_transform()
+        tf[0, 3] = 0.233
+        return tf
 
-        def get_place_pre_grasp_transform():
-            tf = get_pre_grasp_transform()
-            # tf[2, 3] = 0.25
-            # tf[1, 3] = 0.0
-            return tf
-                
+    def _get_place_inside_bottom_transform(self):
+        tf = self._get_inside_bottom_transform()
+        return tf
+
+    def _get_place_pre_grasp_transform(self):
+        tf = self._get_pre_grasp_transform()
+        return tf
+
+    def _compute_drink_pickup_poses_from_aruco(self):
+        if self.aruco_pose is None:
+            raise RuntimeError("No cup pose is available to compute drink pickup poses.")
+
+        drink_poses = {}
+        drink_poses['drink_pose'] = self.get_aruco_relative_pose(self._get_drink_transform(), "drink")
+        drink_poses['pre_grasp_pose'] = self.get_aruco_relative_pose(self._get_pre_grasp_transform(), "drink")
+        drink_poses['inside_bottom_pose'] = self.get_aruco_relative_pose(self._get_inside_bottom_transform(), "drink")
+        drink_poses['inside_top_pose'] = self.get_aruco_relative_pose(self._get_inside_top_transform(), "drink")
+        drink_poses['post_grasp_pose'] = self.get_aruco_relative_pose(self._get_post_grasp_pose(), "drink")
+        drink_poses['place_inside_bottom_pose'] = self.get_aruco_relative_pose(self._get_place_inside_bottom_transform(), "drink")
+        drink_poses['place_pre_grasp_pose'] = self.get_aruco_relative_pose(self._get_place_pre_grasp_transform(), "drink")
+        return drink_poses
+
+    def perceive_cup_info(self, num_samples: int = 3) -> CupInfo:
+        cup_info = CupInfo()
+        cup_info.success = False
+        cup_info.bounding_box = [0, 0, 0, 0]
+
         if self.simulation:
-            # load them from a pickle file
             with open(self.log_dir / 'drink_pickup_pos.pkl', 'rb') as f:
                 drink_pickup_pos = pickle.load(f)
-            drink_poses = drink_pickup_pos["last_drink_poses"]
-
+            self.last_drink_poses = drink_pickup_pos["last_drink_poses"]
+            if self.last_drink_poses is not None:
+                drink_pose = self.last_drink_poses.get("drink_pose")
+                if drink_pose is not None:
+                    cup_info.pose = [
+                        float(drink_pose.position[0]),
+                        float(drink_pose.position[1]),
+                        float(drink_pose.position[2]),
+                        float(drink_pose.orientation[0]),
+                        float(drink_pose.orientation[1]),
+                        float(drink_pose.orientation[2]),
+                        float(drink_pose.orientation[3]),
+                    ]
+                    cup_info.success = True
         else:
-            for _ in range(5): # 5 times so that it stabilizes
+            for _ in range(num_samples):
                 camera_data = self.realsense_interface.get_camera_data()
-                base_to_camera =-self.realsense_interface.get_base_to_camera_transform()
-                self.aruco_pose = self._drink_perception.run_perception(camera_data["rgb_image"], camera_data["camera_info"], camera_data["depth_image"], base_to_camera)
+                base_to_camera = self.realsense_interface.get_base_to_camera_transform()
+                aruco_pose = self._drink_perception.run_perception(
+                    camera_data["rgb_image"],
+                    camera_data["camera_info"],
+                    camera_data["depth_image"],
+                    base_to_camera,
+                )
+                if aruco_pose is not None:
+                    self.aruco_pose = aruco_pose
 
-            drink_poses  = {}
-            drink_poses['drink_pose'] = self.get_aruco_relative_pose(get_drink_transform(), "drink")
-            drink_poses['pre_grasp_pose'] = self.get_aruco_relative_pose(get_pre_grasp_transform(), "drink")
-            drink_poses['inside_bottom_pose'] = self.get_aruco_relative_pose(get_inside_bottom_transform(), "drink")
-            drink_poses['inside_top_pose'] = self.get_aruco_relative_pose(get_inside_top_transform(), "drink")
-            drink_poses['post_grasp_pose'] = self.get_aruco_relative_pose(get_post_grasp_pose(), "drink")
-            drink_poses['place_inside_bottom_pose'] = self.get_aruco_relative_pose(get_place_inside_bottom_transform(), "drink")
-            drink_poses['place_pre_grasp_pose'] = self.get_aruco_relative_pose(get_place_pre_grasp_transform(), "drink")
+            if self.aruco_pose is not None:
+                cup_info.pose = [
+                    float(self.aruco_pose[0][0]),
+                    float(self.aruco_pose[0][1]),
+                    float(self.aruco_pose[0][2]),
+                    float(self.aruco_pose[1][0]),
+                    float(self.aruco_pose[1][1]),
+                    float(self.aruco_pose[1][2]),
+                    float(self.aruco_pose[1][3]),
+                ]
+                cup_info.success = True
+                self.last_drink_poses = self._compute_drink_pickup_poses_from_aruco()
 
-        self.last_drink_poses = drink_poses
+        return cup_info
 
-        return drink_poses
+    def perceive_drink_pickup_poses(self):
+        self.perceive_cup_info()
+        return self.get_last_drink_pickup_poses()
+
+    def get_last_drink_pickup_poses(self):
+        if self.last_drink_poses is None:
+            raise RuntimeError(
+                "No perceived drink pickup poses are available. Call locate/perceive cup first."
+            )
+        return self.last_drink_poses
     
     def record_drink_pickup_joint_pos(self, joint_positions):
         if self.simulation:

@@ -12,6 +12,7 @@ find_package(std_msgs REQUIRED)
 
 rosidl_generate_interfaces(${PROJECT_NAME}
   "action/DrinkAction.action"
+  "srv/PerceiveCup.srv"
   "msg/CupInfo.msg"
   DEPENDENCIES sensor_msgs std_msgs
 )

@@ -6,10 +6,13 @@ from rclpy.node import Node
 from rclpy.action import ActionClient
 
 from drink_actions_test.action import DrinkAction
+from drink_actions_test.srv import PerceiveCup
 
 
 ACTION_TOPICS = {
     "pickup_and_order": "/arm/drink/pickup_and_order",
+    "locate_cup": "/arm/drink/locate_cup",
+    "perceive_cup": "/arm/drink/stream_cup_handle",
     "grab_cup_from_table": "/arm/drink/grab_cup_from_table",
     "bring_cup_to_mouth": "/arm/drink/bring_cup_to_mouth",
     "home_cup": "/arm/drink/home_cup",
@@ -21,20 +24,36 @@ class DrinkActionClientNode(Node):
     def __init__(self):
         super().__init__("drink_action_client")
         self._action_client = None
+        self._service_client = None
         self._goal_done = False
+        self._is_perceive_service = False
 
     def feedback_cb(self, feedback_msg):
         # In ROS 2, feedback callback receives a message wrapper with `.feedback`
         feedback = feedback_msg.feedback
         self.get_logger().info(f"Feedback: {feedback.state}")
 
-    def send_goal(self, topic: str, request_id: str):
-        self._action_client = ActionClient(self, DrinkAction, topic)
+    def send_goal(self, topic: str, request_id: str, action_name: str):
+        self._is_perceive_service = action_name == "perceive_cup"
+        if self._is_perceive_service:
+            self._service_client = self.create_client(PerceiveCup, topic)
+            self.get_logger().info(f"Waiting for service: {topic}")
+            self._service_client.wait_for_service()
+
+            req = PerceiveCup.Request()
+            req.request_id = request_id
+            self.get_logger().info(f"Sending request to {topic}")
+            future = self._service_client.call_async(req)
+            future.add_done_callback(self.service_result_cb)
+            return
+
+        action_type = DrinkAction
+        self._action_client = ActionClient(self, action_type, topic)
 
         self.get_logger().info(f"Waiting for server: {topic}")
         self._action_client.wait_for_server()
 
-        goal_msg = DrinkAction.Goal()
+        goal_msg = action_type.Goal()
         goal_msg.request_id = request_id
 
         self.get_logger().info(f"Sending goal to {topic}")
@@ -62,6 +81,21 @@ class DrinkActionClientNode(Node):
         )
         self._goal_done = True
 
+    def service_result_cb(self, future):
+        try:
+            result = future.result()
+            if result.success:
+                self.get_logger().info(
+                    f"Result: success={result.success} message={result.message} pose={list(result.cup_info.pose)}"
+                )
+            else:
+                self.get_logger().info(
+                    f"Result: success={result.success} message={result.message}"
+                )
+        except Exception as exc:
+            self.get_logger().error(f"Service call failed: {exc}")
+        self._goal_done = True
+
 
 def main():
     rclpy.init()
@@ -82,7 +116,7 @@ def main():
 
     topic = ACTION_TOPICS[action_name]
     node = DrinkActionClientNode()
-    node.send_goal(topic, request_id)
+    node.send_goal(topic, request_id, action_name)
 
     try:
         while rclpy.ok() and not node._goal_done:

@@ -28,7 +28,7 @@ class DrinkPerception():
         orientation = Rotation.from_matrix(mat[:3, :3]).as_quat()
         return (position, orientation)
 
-    def run_perception(self, rgb_image, depth_image, camera_info, base_to_camera_transform):
+    def run_perception(self, rgb_image, camera_info, depth_image, base_to_camera_transform):
 
         # -----------------------------
         # Color mask
