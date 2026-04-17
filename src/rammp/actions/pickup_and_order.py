@@ -6,26 +6,37 @@ class PickupAndOrderAction(BaseAction):
 
     def get_name(self) -> str:
         return "PickupAndOrder"
-    
-    def execute_action(self, params = None) -> None:
-        
-        # Pick drink from wheelchair holder
-        self.move_to_joint_positions(self.sim.scene_description.home_pos)
-        self.move_to_joint_positions(self.sim.scene_description.outside_drink_handle_pos)
-        self.close_gripper()
-        self.move_to_ee_pose(self.sim.scene_description.below_drink_handle_pose)
-        self.move_to_ee_pose(self.sim.scene_description.inside_drink_handle_pose)
-        self.grasp_tool("drink")
-        self.move_to_ee_pose(self.sim.scene_description.above_drink_handle_pose)
-        self.move_to_joint_positions(self.sim.scene_description.home_pos)
 
-        # Place an order
+    def execute_action(self, params = None) -> None:
+
+        # Pick drink from wheelchair holder
+        print("Moving to outside drink handle position")
+        self.move_to_joint_positions(self.sim.scene_description.outside_drink_handle_pos)
+        time.sleep(0.1)
+        print("Closing gripper")
+        self.close_gripper()
+        time.sleep(0.1)
+
+        print("Moving to below drink handle pose")
+        self.move_to_ee_pose(self.sim.scene_description.below_drink_handle_pose)
+        time.sleep(0.1)
+
+        print("Moving to inside drink handle pose")
+        self.move_to_ee_pose(self.sim.scene_description.inside_drink_handle_pose)
+        time.sleep(0.1)
+
+        print("Grasping drink")
+        self.grasp_tool("drink")
+        time.sleep(0.1)
+
+        print("Moving to above drink handle pose")
+        self.move_to_ee_pose(self.sim.scene_description.above_drink_handle_pose)
+        time.sleep(0.1)
+
+        print("Moving to home position")
         self.move_to_joint_positions(self.sim.scene_description.home_pos)
-        self.move_to_ee_pose(self.sim.scene_description.drink_handover_pose)
-        
-        # Note: FSM will handle below states
-        # input("Press Enter to ungrasp drink")
-        # # time.sleep(5.0) # Wait for 5 seconds to simulate waiting for the human to take the drink
-        # self.ungrasp_tool("drink")
-        # time.sleep(3.0) # Wait for 3 seconds after ungrasping
-        # self.move_to_joint_positions(self.sim.scene_description.home_pos)
+        time.sleep(0.1)
+
+        print("Moving to drink handover pose")
+        self.move_to_joint_positions(self.sim.scene_description.drink_handover_pos)
+

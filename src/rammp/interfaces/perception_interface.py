@@ -5,8 +5,9 @@ from pybullet_helpers.geometry import Pose
 from scipy.spatial.transform import Rotation as R
 import pickle
 
+import rclpy
 from rclpy.node import Node
-from drink_actions_test.msg import CupInfo
+from cornell_feeding_interfaces.msg import CupInfo
 
 from rammp.interfaces.realsense_interface import RealSenseInterface
 
@@ -29,8 +30,7 @@ class PerceptionInterface:
             self._head_perception.set_tool("drink")
             self.node.get_logger().info("Waiting for camera data before warm-starting head perception...")
             while self.realsense_interface.get_camera_data()["rgb_image"] is None:
-                import time
-                time.sleep(0.1)
+                rclpy.spin_once(self.node, timeout_sec=0.1)
             self.node.get_logger().info("Camera data received, warm-starting head perception.")
             for _ in range(10):
                 self.run_head_perception()
@@ -43,6 +43,7 @@ class PerceptionInterface:
 
         self.last_drink_poses = None
         self.aruco_pose = None
+        self.last_bounding_box = [0, 0, 0, 0]
 
     def run_head_perception(self, ):
         # print("Running Head Perception")
@@ -54,7 +55,7 @@ class PerceptionInterface:
             except FileNotFoundError:
                 raise FileNotFoundError("No transfer logged data found for tool: ", self.tool)
             return head_perception_data
-        
+
         camera_data = self.realsense_interface.get_camera_data()
         base_to_camera = self.realsense_interface.get_base_to_camera_transform()
 
@@ -92,7 +93,7 @@ class PerceptionInterface:
     def _get_pre_grasp_transform(self):
         tf = np.zeros((4, 4))
         tf[:3, :3] = R.from_euler("xyz", [np.pi, 0, np.pi / 2]).as_matrix()
-        tf[:3, 3] = np.array([0.02, 0.01, 0.15])
+        tf[:3, 3] = np.array([0.02, 0.03, 0.15])
         tf[3, 3] = 1
         return tf
 
@@ -103,12 +104,17 @@ class PerceptionInterface:
 
     def _get_inside_top_transform(self):
         tf = self._get_inside_bottom_transform()
-        tf[0, 3] = 0.043
+        tf[0, 3] = 0.063
         return tf
 
     def _get_post_grasp_pose(self):
         tf = self._get_inside_top_transform()
-        tf[0, 3] = 0.233
+        tf[0, 3] = 0.153
+        return tf
+
+    def _get_post_grasp_pose_2(self):
+        tf = self._get_post_grasp_pose()
+        tf[2, 3] = 0.25
         return tf
 
     def _get_place_inside_bottom_transform(self):
@@ -129,6 +135,7 @@ class PerceptionInterface:
         drink_poses['inside_bottom_pose'] = self.get_aruco_relative_pose(self._get_inside_bottom_transform(), "drink")
         drink_poses['inside_top_pose'] = self.get_aruco_relative_pose(self._get_inside_top_transform(), "drink")
         drink_poses['post_grasp_pose'] = self.get_aruco_relative_pose(self._get_post_grasp_pose(), "drink")
+        drink_poses['post_grasp_pose_2'] = self.get_aruco_relative_pose(self._get_post_grasp_pose_2(), "drink")
         drink_poses['place_inside_bottom_pose'] = self.get_aruco_relative_pose(self._get_place_inside_bottom_transform(), "drink")
         drink_poses['place_pre_grasp_pose'] = self.get_aruco_relative_pose(self._get_place_pre_grasp_transform(), "drink")
         return drink_poses
@@ -159,7 +166,7 @@ class PerceptionInterface:
             for _ in range(num_samples):
                 camera_data = self.realsense_interface.get_camera_data()
                 base_to_camera = self.realsense_interface.get_base_to_camera_transform()
-                aruco_pose = self._drink_perception.run_perception(
+                aruco_pose, bounding_box = self._drink_perception.run_perception(
                     camera_data["rgb_image"],
                     camera_data["camera_info"],
                     camera_data["depth_image"],
@@ -167,6 +174,7 @@ class PerceptionInterface:
                 )
                 if aruco_pose is not None:
                     self.aruco_pose = aruco_pose
+                    self.last_bounding_box = bounding_box
 
             if self.aruco_pose is not None:
                 cup_info.pose = [
@@ -178,6 +186,7 @@ class PerceptionInterface:
                     float(self.aruco_pose[1][2]),
                     float(self.aruco_pose[1][3]),
                 ]
+                cup_info.bounding_box = self.last_bounding_box
                 cup_info.success = True
                 self.last_drink_poses = self._compute_drink_pickup_poses_from_aruco()
 
@@ -193,11 +202,11 @@ class PerceptionInterface:
                 "No perceived drink pickup poses are available. Call locate/perceive cup first."
             )
         return self.last_drink_poses
-    
+
     def record_drink_pickup_joint_pos(self, joint_positions):
         if self.simulation:
             return
-        
+
         self.drink_pickup_joint_pos = joint_positions[:7]
         # save them in a pickle file
         drink_pickup_pos = {
@@ -221,7 +230,7 @@ class PerceptionInterface:
             _, _, yaw = rot.as_euler("xyz")
             new_rot = R.from_euler("xyz", [roll, pitch, yaw])
             goal_pose = Pose(goal_pose[0], new_rot.as_quat())
-        
+
         return goal_pose
 
     def pose_to_matrix(self, pose):
@@ -232,8 +241,8 @@ class PerceptionInterface:
         pose_matrix[:3, :3] = R.from_quat(orientation).as_matrix()
         pose_matrix[3, 3] = 1
         return pose_matrix
-    
+
     def matrix_to_pose(self, mat):
         position = mat[:3, 3]
         orientation = R.from_matrix(mat[:3, :3]).as_quat()
-        return Pose(position, orientation) 
+        return Pose(position, orientation)

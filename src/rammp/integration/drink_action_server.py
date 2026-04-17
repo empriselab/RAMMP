@@ -1,14 +1,16 @@
 #!/usr/bin/env python3
 from pathlib import Path
 import argparse
+import threading
 
 import rclpy
 from rclpy.node import Node
 from rclpy.action import ActionServer
 from rclpy.executors import MultiThreadedExecutor
 
-from drink_actions_test.action import DrinkAction
-from drink_actions_test.srv import PerceiveCup
+from std_srvs.srv import SetBool
+from cornell_feeding_interfaces.action import DrinkAction
+from cornell_feeding_interfaces.msg import CupInfo
 
 # Interfaces
 from rammp.interfaces.perception_interface import PerceptionInterface
@@ -112,10 +114,13 @@ class DrinkActionServers(Node):
             self.execute_locate_cup,
         )
 
-        self.perceive_cup_service = self.create_service(
-            PerceiveCup,
-            "/arm/drink/stream_cup_handle",
-            self.execute_perceive_cup,
+        self._streaming = False
+        self._stream_thread = None
+        self._cup_info_pub = self.create_publisher(CupInfo, "/arm/drink/cup_info", 10)
+        self.stream_cup_handle_service = self.create_service(
+            SetBool,
+            "/arm/drink/detection/enable",
+            self.execute_set_streaming,
         )
 
         self.bring_cup_to_mouth_server = ActionServer(
@@ -214,25 +219,39 @@ class DrinkActionServers(Node):
                 f"locate_cup failed: {exc}",
             )
 
-    def execute_perceive_cup(self, request, response):
-        self.get_logger().info(
-            f"perceive_cup request received: {request.request_id}"
-        )
-        try:
-            cup_info = self.perception_interface.perceive_cup_info()
-            if not cup_info.success:
-                response.success = False
-                response.message = "perceive_cup did not find a cup"
+    def execute_set_streaming(self, request, response):
+        if request.data:
+            if self._streaming:
+                response.success = True
+                response.message = "already streaming"
                 return response
+            self._streaming = True
+            self._stream_thread = threading.Thread(
+                target=self._stream_cup_handle, daemon=True
+            )
+            self._stream_thread.start()
+            self.get_logger().info("cup handle streaming started")
             response.success = True
-            response.message = "perceive_cup complete"
-            response.cup_info = cup_info
-            return response
-        except Exception as exc:
-            self.get_logger().error(f"perceive_cup failed: {exc}")
-            response.success = False
-            response.message = f"perceive_cup failed: {exc}"
-            return response
+            response.message = "streaming started"
+        else:
+            self._streaming = False
+            if self._stream_thread is not None:
+                self._stream_thread.join(timeout=2.0)
+                self._stream_thread = None
+            self.get_logger().info("cup handle streaming stopped")
+            response.success = True
+            response.message = "streaming stopped"
+        return response
+
+    def _stream_cup_handle(self):
+        rate = self.create_rate(10)  # 10 Hz
+        while self._streaming:
+            try:
+                cup_info = self.perception_interface.perceive_cup_info()
+                self._cup_info_pub.publish(cup_info)
+            except Exception as exc:
+                self.get_logger().error(f"stream_cup_handle failed: {exc}")
+            rate.sleep()
 
     def execute_bring_cup_to_mouth(self, goal_handle):
         self.get_logger().info(

@@ -59,7 +59,7 @@ class DrinkPerception():
 
         if len(points_3d) == 0:
             # rospy.logwarn("No valid 3D points from mask.")
-            return
+            return None, None
 
         points_3d = np.array(points_3d)
         pixels = np.array(pixels)
@@ -81,7 +81,7 @@ class DrinkPerception():
 
         if not np.any(valid):
             # rospy.logwarn("DBSCAN found no clusters.")
-            return
+            return None, None
 
         unique, counts = np.unique(labels[valid], return_counts=True)
         main_label = unique[np.argmax(counts)]
@@ -202,21 +202,17 @@ class DrinkPerception():
         # base to tag homogeneous transform and update tf
         base_to_tag = np.dot(base_to_camera_transform, camera_to_tag)
 
-        return self.matrix_to_pose(base_to_tag)
+        x_min, y_min = cluster_pixels.min(axis=0)
+        x_max, y_max = cluster_pixels.max(axis=0)
+        bounding_box = [int(x_min), int(y_min), int(x_max), int(y_max)]
+
+        return self.matrix_to_pose(base_to_tag), bounding_box
 
     def detect_handle_color(self, bgr_image):
         hsv = cv2.cvtColor(bgr_image, cv2.COLOR_BGR2HSV)
-        # lower = np.array([60, 50, 50])
-        # upper = np.array([95, 180, 200])
-        # Wider but still green-focused
-        # lower = np.array([50, 30, 30])
-        # upper = np.array([105, 255, 255])
-
-        # lower = np.array([80, 120, 120])
-        # upper = np.array([100, 255, 255])
         
-        lower = np.array([70, 70, 70])
-        upper = np.array([110, 255, 255])
+        lower = np.array([37, 205, 78])
+        upper = np.array([105, 255, 255])
 
         return cv2.inRange(hsv, lower, upper)
 
@@ -241,10 +237,10 @@ class DrinkPerception():
         if math.isnan(depth) or depth < 0.05 or depth > 1.0:
             return False, None
 
-        fx = camera_info.K[0]
-        fy = camera_info.K[4]
-        cx = camera_info.K[2]
-        cy = camera_info.K[5]
+        fx = camera_info.k[0]
+        fy = camera_info.k[4]
+        cx = camera_info.k[2]
+        cy = camera_info.k[5]
 
         world_x = (depth / fx) * (image_x - cx)
         world_y = (depth / fy) * (image_y - cy)

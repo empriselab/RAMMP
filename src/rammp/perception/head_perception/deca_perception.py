@@ -789,11 +789,11 @@ class HeadPerception:
 
         depth = depth / 1000.0  # Convert from mm to m
 
-        fx = camera_info.K[0]
-        fy = camera_info.K[4]
-        cx = camera_info.K[2]
-        # cy = image.shape[0] - camera_info.K[5]
-        cy = camera_info.K[5]
+        fx = camera_info.k[0]
+        fy = camera_info.k[4]
+        cx = camera_info.k[2]
+        # cy = image.shape[0] - camera_info.k[5]
+        cy = camera_info.k[5]
 
         # Convert to world space
         world_x = (depth / fx) * (image_x - cx)
@@ -804,10 +804,10 @@ class HeadPerception:
 
     def world2Pixel(self, camera_info, world_x, world_y, world_z, image_height, image_width):
 
-        fx = camera_info.K[0]
-        fy = camera_info.K[4]
-        cx = camera_info.K[2]
-        cy = camera_info.K[5]
+        fx = camera_info.k[0]
+        fy = camera_info.k[4]
+        cx = camera_info.k[2]
+        cy = camera_info.k[5]
 
         image_x = world_x * (fx / world_z) + cx
         image_y = world_y * (fy / world_z) + cy

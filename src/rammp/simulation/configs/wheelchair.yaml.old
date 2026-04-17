@@ -1,24 +1,24 @@
 # Config file when robot is mounted on vention stand
 
 # Robot constants
-retract_pos:
+retract_pos: 
   description: "Rest configuration of the robot"
   type: "joint_positions"
   values: [0.0, -0.34903602299465675, -3.141591055693139, -2.0, 0.0, -0.872688061814757, 1.57075917569769]
 home_pos:
   description: "Home position of the robot"
   type: "joint_positions"
-  values: [-0.067677,-0.729245,-3.094726,-2.444951,-0.020545,0.166237,1.616856]
-initial_joints:
+  values: [0.0, 0.26191187306569164, -3.1415742777782714, -2.269018308753582, -1.1185276577840852e-05, 0.9598948696060562, 1.5707649014940337,]
+initial_joints: 
   description: "Initial configuration of the robot"
   type: "joint_positions"
   values: [0.0, -0.34903602299465675, -3.141591055693139, -2.5482592711638783, 0.0, -0.872688061814757, 1.57075917569769, 0.8, 0.8, 0.8, 0.8, -0.8, -0.8]
 
-before_transfer_pos:
+before_transfer_pos: 
   description: "Ready to transfer configuration, the user's face should be visible from this configuration"
   type: "joint_positions"
   values: [-2.86554642, -1.61951779, -2.60986085, -1.37302839, 1.11779249, -1.18028264, 2.05515862]
-absolute_before_transfer_pos:
+absolute_before_transfer_pos: 
   description: "Ready to transfer configuration, the user's face should be visible from this configuration"
   type: "joint_positions"
   values: [-2.86554642, -1.61951779, -2.60986085, -1.37302839, 1.11779249, -1.18028264, 2.05515862]
@@ -30,11 +30,11 @@ drink_transfer_waypoint_pos:
   description: "Waypoint from home pos to drink_before_transfer_pos"
   type: "joint_positions"
   values: [0.24926565,  0.42492386,  2.95349492, -2.04173775,  1.73755362, 1.62121436,  0.891071]
-drink_before_transfer_pos:
+drink_before_transfer_pos: 
   description: "Ready to transfer configuration, the user's face should be visible from this configuration"
   type: "joint_positions"
   # values: [-0.18247394,  1.51160651,  1.2398947 , -1.35675594, -3.13563543, 1.60767818, -0.32014765]
-  values: [-2.185566, -1.242184, -2.678941, -1.447121, -0.427996, -1.645313, 2.119943]
+  values: [-0.24420921,  1.3168486 ,  1.15006708, -1.16072917,  3.01759747, 1.66680848, -0.46781887]
 drink_before_transfer_pose:
   description: ""
   type: "ee_pose"
@@ -42,13 +42,13 @@ drink_before_transfer_pose:
   values: [0.14008828,  0.36175472,  0.54307616, -0.50444171,  0.49828791, 0.5006045 , -0.4966315]
 
 # Drink placement constants
-drink_gaze_pos:
+drink_gaze_pos: 
   description: ""
   type: "joint_positions"
   # values: [-0.00445280534261272, 0.8412260759078066, -3.126206506707969, -2.354753187410394, 0.005642485174632118, 1.6401406473647613, 1.6816805008897628]
   # values: [0.25299803987060104, 0.7068668025941645, -3.039494780563316, -2.307245323040579, 0.3375881254433288, 1.4255256830210363, 1.5864775519255012]
   values: [0.03199404596145125, 0.3769731820408335, -3.1333970416511834, -2.5109305411125646, 0.04107811964863056, 1.317448347557059, 1.5568320416190662]
-drink_staging_pos:
+drink_staging_pos: 
   description: ""
   type: "joint_positions"
   # values: [-2.5860902733967808, -1.105096803823792, -1.0315333702969696, -1.3979449215077393, -0.7852325147776451, -0.8370922506847585, -2.7182634909296315]
@@ -65,15 +65,15 @@ inside_drink_handle_pos:
 inside_drink_handle_pose:
   description: "Pose for picking up the drink from the handle"
   type: "ee_pose"
-  values: [-0.35199681, -0.04950929, 0.09805880, -0.01730966, 0.71605511, 0.69771739, 0.01248593]
+  values: [-0.2942967116832733, -0.025764569640159607, 0.11549066483974457, 0.03666796462650288, 0.7174768545096796, 0.6954346334072048, 0.01590893682281142]
 above_drink_handle_pos:
   description: "Configuration just above the drink handle"
   type: "joint_positions"
-  values: [1.959564, 1.128211, -2.406802, -1.734241, -2.587063, 1.474952, 2.351128]
+  values: [1.8705956943981141, 1.0790831128749256, -2.3880264557537347, -1.9216843120115943, -2.662112869874183, 1.4097497825136793, 2.234906943615193]
 above_drink_handle_pose:
   description: "Pose just above the drink handle"
   type: "ee_pose"
-  values: [-0.344717, -0.053895, 0.23, 0.037983, 0.732803, 0.679332, 0.008032]
+  values: [-0.2842967116832733, -0.017764569640159607, 0.22549066483974457, 0.03666796462650288, 0.7174768545096796, 0.6954346334072048, 0.01590893682281142]
 below_drink_handle_pos:
   description: "Configuration just below the drink handle, for placing the gripper fingers around the handle"
   type: "joint_positions"
@@ -81,11 +81,11 @@ below_drink_handle_pos:
 below_drink_handle_pose:
   description: "Pose just below the drink handle, for placing the gripper fingers around the handle"
   type: "ee_pose"
-  values: [-0.35199681, -0.04950929, 0.05832191, -0.01730966, 0.71605511, 0.69771739, 0.01248593]
+  values: [-0.2942967116832733, -0.025764569640159607, 0.07549066483974457, 0.03666796462650288, 0.7174768545096796, 0.6954346334072048, 0.01590893682281142]
 outside_drink_handle_pos:
   description: "Configuration for picking up the drink from outside the handle"
   type: "joint_positions"
-  values: [2.032245, 1.477994, -2.582400, -1.273346, -2.804721, 1.666167, 2.269164]
+  values: [1.8922759562002311, 1.425839802871611, -2.5593180475904322, -1.4537631800591466, -2.8769309002510264, 1.6263839555959025, 2.169495179868994]
 outside_drink_handle_pose:
   description: "Pose for picking up the drink from outside the handle"
   type: "ee_pose"
@@ -95,10 +95,10 @@ outside_drink_handle_pose:
 drink_handover_pos:
   description: "Configuration for handing over the drink to the user"
   type: "joint_positions"
-
-  values: [-0.602761, 0.474774, -2.942239, -0.982543, -1.996775, 0.437512, -2.829598]
+  # values: [-0.46032739442019643, 0.6085030143111151, 3.090290317298834, -1.5458089515511189, -0.7090043222640894, 0.728622232118049, 2.1775895916861807]
+  values: [-0.5239833360597066, 0.5571696521934563, -3.0132525238138936, -1.236588252117583, -1.0949171368730735, 0.404562765275241, 2.5538122283528026]
 drink_handover_pose:
   description: "Pose for handing over the drink to the user"
-  type: "ee_pose"
+  type: "ee_pose" 
   # values: [0.7348425984382629, 0.2526971101760864, 0.45529741048812866, 0.48647470661161313, 0.5146372440565193, 0.5111991772257108, 0.48699719512622647]
   values: [0.762326180934906, 0.2537126839160919, 0.5665861964225769, 0.4865989279415353, 0.5148627783843238, 0.5110753970788706, 0.4867645645085497]

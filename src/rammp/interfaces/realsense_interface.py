@@ -42,30 +42,27 @@ class RealSenseInterface:
         self.broadcaster = tf2_ros.TransformBroadcaster(self.node)
 
         queue_size = 1000
-        from rclpy.qos import QoSProfile, QoSHistoryPolicy, QoSReliabilityPolicy
-        qos_profile = QoSProfile(
-            depth=10,
-            history=QoSHistoryPolicy.KEEP_LAST,
-            reliability=QoSReliabilityPolicy.BEST_EFFORT,
-        )
+        from rclpy.qos import qos_profile_sensor_data, QoSProfile, QoSReliabilityPolicy, QoSHistoryPolicy
+        image_qos = qos_profile_sensor_data
+        info_qos = QoSProfile(depth=10, history=QoSHistoryPolicy.KEEP_LAST, reliability=QoSReliabilityPolicy.RELIABLE)
 
         self.color_image_sub = message_filters.Subscriber(
             self.node,
             Image,
             "/camera/wrist/color/image_raw",
-            qos_profile=qos_profile,
+            qos_profile=image_qos,
         )
         self.camera_info_sub = message_filters.Subscriber(
             self.node,
             CameraInfo,
             "/camera/wrist/color/camera_info",
-            qos_profile=qos_profile,
+            qos_profile=info_qos,
         )
         self.depth_image_sub = message_filters.Subscriber(
             self.node,
             Image,
-            "/camera/wrist/depth/image_rect",
-            qos_profile=qos_profile,
+            "/camera/wrist/aligned_depth_to_color/image_raw",
+            qos_profile=image_qos,
         )
 
         self.ts_top = message_filters.TimeSynchronizer(
@@ -106,7 +103,7 @@ class RealSenseInterface:
             if camera_info_data is None:
                 return None
 
-        target_frame = "camera_wrist_color_optical_frame"
+        target_frame = "wrist_color_optical_frame"
         stamp = Time.from_msg(camera_info_data.header.stamp)
 
         try:

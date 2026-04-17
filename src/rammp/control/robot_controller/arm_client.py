@@ -74,7 +74,7 @@ class ArmInterfaceClient:
 
         self.ee_pose_sub = self.node.create_subscription(
             PoseStamped,
-            "/arm/ee_pose",
+            "/arm/ee/pose",
             self._ee_pose_callback,
             10,
         )
@@ -153,6 +153,9 @@ class ArmInterfaceClient:
             f"Published JointCommand with {len(target)} joints"
         )
 
+        STABLE_SAMPLES_REQUIRED = 5
+        stable_count = 0
+
         start_time = time.time()
 
         while time.time() - start_time <= timeout_sec:
@@ -163,10 +166,14 @@ class ArmInterfaceClient:
                 target=target,
                 tolerance=position_tolerance,
             ):
-                self.node.get_logger().info(
-                    f"JointCommand reached goal within tolerance {position_tolerance}"
-                )
-                return True
+                stable_count += 1
+                if stable_count >= STABLE_SAMPLES_REQUIRED:
+                    self.node.get_logger().info(
+                        f"JointCommand reached goal within tolerance {position_tolerance}"
+                    )
+                    return True
+            else:
+                stable_count = 0
 
             time.sleep(0.05)
 
