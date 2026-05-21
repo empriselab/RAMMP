@@ -1,20 +1,25 @@
-# Description: This script is used to detect ArUco markers and estimate their pose in the camera frame.
+# Detects a colored cup handle and estimates its 6-DOF pose in the camera frame.
 
-# python imports
-import os, sys
 import cv2
 import numpy as np
-import time
-import math
 from scipy.spatial.transform import Rotation
-from sklearn.cluster import DBSCAN   # <-- ADDED
 import open3d as o3d
 
+from rammp.perception.drink_perception import drink_geometry as dg
 from rammp.utils.timing import timer
 
+# Smallest connected colored region (pixels) accepted as a candidate handle.
+_MIN_BLOB_AREA = 200
+# Fewest valid 3D points required to attempt a plane/pose fit.
+_MIN_CLUSTER_POINTS = 50
+
+
 class DrinkPerception():
-    def __init__(self):
-        pass
+    def __init__(self, debug: bool = False):
+        # When debug is True, run_perception writes color_mask.png and
+        # handle_mask.png to the working directory. Off by default — those
+        # per-frame disk writes dominated the runtime.
+        self.debug = debug
 
     def pose_to_matrix(self, pose):
         position = pose[0]
@@ -24,7 +29,7 @@ class DrinkPerception():
         pose_matrix[:3, :3] = Rotation.from_quat(orientation).as_matrix()
         pose_matrix[3, 3] = 1
         return pose_matrix
-    
+
     def matrix_to_pose(self, mat):
         position = mat[:3, 3]
         orientation = Rotation.from_matrix(mat[:3, :3]).as_quat()
@@ -38,8 +43,7 @@ class DrinkPerception():
         with timer("drink/color_mask"):
             mask = self.detect_handle_color(rgb_image)
 
-        # save mask for debugging (overlay on RGB)
-        with timer("drink/debug_imwrite"):
+        if self.debug:
             vis = rgb_image.copy()
             vis[mask > 0] = (0, 255, 0)
             cv2.imwrite("color_mask.png", vis)
@@ -48,71 +52,31 @@ class DrinkPerception():
             mask = self.clean_mask(mask)
 
         # -----------------------------
-        # Extract ALL 3D points from mask
+        # Largest connected blob (replaces 3D DBSCAN)
         # -----------------------------
-        points_3d = []
-        pixels = []
+        with timer("drink/cluster"):
+            cluster_mask = dg.largest_blob(mask, min_area=_MIN_BLOB_AREA)
+        if cluster_mask is None:
+            return None, None
 
+        # -----------------------------
+        # Back-project the blob to 3D (vectorized)
+        # -----------------------------
+        fx = camera_info.k[0]
+        fy = camera_info.k[4]
+        cx = camera_info.k[2]
+        cy = camera_info.k[5]
         with timer("drink/backproject"):
-            ys, xs = np.where(mask > 0)
-            for u, v in zip(xs, ys):
-                ok, p = self.pixel2World(
-                    camera_info, u, v, depth_image)
-                if ok:
-                    points_3d.append(p)
-                    pixels.append((u, v))
-
-        if len(points_3d) == 0:
-            # rospy.logwarn("No valid 3D points from mask.")
+            cluster_points_3d, cluster_pixels = dg.backproject_mask(
+                cluster_mask, depth_image, fx, fy, cx, cy
+            )
+        if len(cluster_points_3d) < _MIN_CLUSTER_POINTS:
             return None, None
 
-        points_3d = np.array(points_3d)
-        pixels = np.array(pixels)
-
-        # print("Found all pixels")
-
-        # -----------------------------
-        # DBSCAN clustering (7 cm)
-        # -----------------------------
-        with timer("drink/dbscan"):
-            clustering = DBSCAN(
-                eps=0.07,
-                min_samples=50
-            ).fit(points_3d)
-
-        # print("Ran DBSCAN")
-
-        labels = clustering.labels_
-        valid = labels >= 0
-
-        if not np.any(valid):
-            # rospy.logwarn("DBSCAN found no clusters.")
-            return None, None
-
-        unique, counts = np.unique(labels[valid], return_counts=True)
-        main_label = unique[np.argmax(counts)]
-
-        cluster_pixels = pixels[labels == main_label]
-        cluster_points_3d = points_3d[labels == main_label]
-
-        # print("Found cluster")
-
-        # -----------------------------
-        # Project cluster back to image
-        # -----------------------------
-        cluster_mask = np.zeros(mask.shape, dtype=np.uint8)
-        for u, v in cluster_pixels:
-            cluster_mask[v, u] = 255
-
-        cluster_mask = cv2.dilate(
-            cluster_mask, np.ones((3, 3), np.uint8), iterations=1)
-
-        with timer("drink/debug_imwrite"):
+        if self.debug:
             vis = rgb_image.copy()
             vis[cluster_mask > 0] = (0, 0, 255)
             cv2.imwrite("handle_mask.png", vis)
-        # rospy.loginfo(
-        #     f"Saved handle_mask.png with {cluster_pixels.shape[0]} pixels")
 
         with timer("drink/ransac_plane"):
             pcd = o3d.geometry.PointCloud()
@@ -204,7 +168,7 @@ class DrinkPerception():
         camera_to_tag = np.zeros((4, 4))
         camera_to_tag[:3, :3] = R_mat
         camera_to_tag[:3, 3] = center_3d
-        camera_to_tag[3, 3] = 1 
+        camera_to_tag[3, 3] = 1
 
         # base to tag homogeneous transform and update tf
         base_to_tag = np.dot(base_to_camera_transform, camera_to_tag)
@@ -217,7 +181,7 @@ class DrinkPerception():
 
     def detect_handle_color(self, bgr_image):
         hsv = cv2.cvtColor(bgr_image, cv2.COLOR_BGR2HSV)
-        
+
         lower = np.array([37, 205, 78])
         upper = np.array([105, 255, 255])
 
@@ -228,31 +192,3 @@ class DrinkPerception():
         mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
         mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
         return mask
-
-    def pixel2World(self, camera_info, image_x, image_y, depth_image):
-
-        # print("Image pixels: ", image_x, image_y)
-        # print("Depth shape: ", depth_image.shape)
-
-        if image_y >= depth_image.shape[0] or image_x >= depth_image.shape[1]:
-            return False, None
-
-        depth = depth_image[image_y, image_x]
-        depth = depth / 1000 # convert from mm to m
-        # print("Depth: ", depth)
-
-        if math.isnan(depth) or depth < 0.05 or depth > 1.0:
-            return False, None
-
-        fx = camera_info.k[0]
-        fy = camera_info.k[4]
-        cx = camera_info.k[2]
-        cy = camera_info.k[5]
-
-        world_x = (depth / fx) * (image_x - cx)
-        world_y = (depth / fy) * (image_y - cy)
-        world_z = depth
-
-        # print("3D Pixel: ", world_x, world_y, world_z)
-
-        return True, (world_x, world_y, world_z)
