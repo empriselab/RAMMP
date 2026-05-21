@@ -12,7 +12,7 @@ from cornell_feeding_interfaces.msg import CupInfo
 from rammp.interfaces.realsense_interface import RealSenseInterface
 
 from rammp.perception.drink_perception.drink_perception import DrinkPerception
-from rammp.perception.head_perception.deca_perception import HeadPerception
+from rammp.perception.head_perception.mediapipe_perception import MediaPipeHeadPerception
 from rammp.utils.timing import timer
 
 class PerceptionInterface:
@@ -26,7 +26,7 @@ class PerceptionInterface:
         if not self.simulation:
             self.realsense_interface = RealSenseInterface(self.node)
 
-            self._head_perception = HeadPerception()
+            self._head_perception = MediaPipeHeadPerception()
             # Warm start head perception — wait until camera data is available
             self._head_perception.set_tool("drink")
             self.node.get_logger().info("Waiting for camera data before warm-starting head perception...")
@@ -61,14 +61,11 @@ class PerceptionInterface:
         base_to_camera = self.realsense_interface.get_base_to_camera_transform()
 
         with timer("head/run_head_perception_total"):
-            head_perception_data = self._head_perception.run_deca(
+            head_perception_data = self._head_perception.run(
                 camera_data["rgb_image"],
                 camera_data["camera_info"],
                 camera_data["depth_image"],
                 base_to_camera,
-                debug_print=False,
-                visualize=False,
-                filter_noisy_readings=False,
             )
 
         if head_perception_data is not None:
@@ -76,6 +73,7 @@ class PerceptionInterface:
                 "head_pose": head_perception_data["head_pose"],
                 "face_keypoints": head_perception_data["landmarks2d"],
                 "tool_tip_target_pose": head_perception_data["tool_tip_target_pose"],
+                "jaw_open_score": head_perception_data["jaw_open_score"],
                 "camera_color_data": camera_data["rgb_image"],
             }
             if self.log_dir is not None:
