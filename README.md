@@ -17,22 +17,7 @@
 
 ---
 
-### 2. Install PyTorch (CUDA 12.1)
-
-    conda install pytorch==2.1.0 torchvision==0.16.0 torchaudio==2.1.0 \
-        pytorch-cuda=12.1 numpy=1.26.4 numpy-base=1.26.4 \
-        -c pytorch -c nvidia -c defaults
-
----
-
-### 3. Install PyTorch3D
-
-    pip install pytorch3d \
-        -f https://dl.fbaipublicfiles.com/pytorch3d/packaging/wheels/py310_cu121_pyt210/download.html
-
----
-
-### 4. Create ROS 2 workspace and clone repository
+### 2. Create ROS 2 workspace and clone repository
 
     mkdir -p ~/ros2_ws/src
     cd ~/ros2_ws/src
@@ -41,25 +26,19 @@
 
 ---
 
-### 5. Install additional Python dependencies
-
-    pip install --no-build-isolation chumpy
-
----
-
-### 6. Install RAMMP
+### 3. Install RAMMP
 
     pip install -e ".[full]"
 
 ---
 
-### 7. Install Pinocchio
+### 4. Install Pinocchio
 
     conda install -c conda-forge "pinocchio=3.1.*"
 
 ---
 
-### 8. Configure environment variables
+### 5. Configure environment variables
 
 Add the following to your `~/.bashrc`:
 
@@ -72,7 +51,7 @@ Then reload:
 
 ---
 
-### 9. Build ROS 2 workspace
+### 6. Build ROS 2 workspace
 
     cd ~/ros2_ws
     colcon build
@@ -80,36 +59,22 @@ Then reload:
 
 ---
 
-### 10. Download DECA model files (robot mode only)
-
-DECA head perception requires model files not included in the repository.
-
-**Download GitHub-sourced files:**
-
-    cd src/rammp/perception/head_perception/DECA/data
-    wget https://github.com/YadiraF/DECA/raw/master/data/landmark_embedding.npy
-    wget https://github.com/YadiraF/DECA/raw/master/data/head_template.obj
-    wget https://github.com/YadiraF/DECA/raw/master/data/texture_data_256.npy
-    wget https://github.com/YadiraF/DECA/raw/master/data/fixed_displacement_256.npy
-    wget https://github.com/YadiraF/DECA/raw/master/data/uv_face_mask.png
-    wget https://github.com/YadiraF/DECA/raw/master/data/uv_face_eye_mask.png
-    wget https://github.com/YadiraF/DECA/raw/master/data/mean_texture.jpg
-
-**`generic_model.pkl`:** Register at [flame.is.tue.mpg.de](https://flame.is.tue.mpg.de), run the provided `fetch_data.sh`, then move the file:
-
-    mv data/FLAME2020/FLAME2020/generic_model.pkl data/
-
-**`deca_model.tar`:** Download from [Google Drive](https://drive.google.com/file/d/1rp8kdyLPvErw2dTmqtjISRVvQLj6Yzje). Despite the extension it is a PyTorch checkpoint — do **not** extract it, just place it in `data/`.
-
-**`resnet50_ft_weight.pkl`:** Download separately (face recognition model) and place in `data/`.
-
-> **NumPy / chumpy compatibility:** The FLAME model was serialized with `chumpy`, which does not support NumPy >= 1.24. If you encounter `ImportError: cannot import name 'bool' from 'numpy'`, patch `chumpy/__init__.py` by replacing the offending import line with Python builtins equivalents.
-
----
-
 ## Running
 
     ros2 launch drink_actions_test real.launch.py
+
+---
+
+## Head-perception calibration
+
+Head perception tracks the user's head relative to a one-time calibration.
+Run this once per user / camera setup before using `bring_cup_to_mouth`:
+
+    python -m rammp.perception.head_perception.calibrate_head --tool drink
+
+Position the user comfortably, hold the drink tip at their mouth, and press
+Enter to capture. This writes the reference files to
+`src/rammp/perception/head_perception/mediapipe_config/drink/`.
 
 ---
 
