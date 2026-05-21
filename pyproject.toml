@@ -28,6 +28,7 @@ full = [
     "scikit-learn",
     "open3d",
     "numpy",
+    "scipy",
     "mediapipe",
     "defusedxml",
     "twisted",
