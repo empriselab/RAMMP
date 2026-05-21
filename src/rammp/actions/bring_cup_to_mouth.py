@@ -22,11 +22,13 @@ class BringCupToMouthAction(BaseAction):
         self.move_to_joint_positions(self.sim.scene_description.drink_before_transfer_pos)
 
         if self.robot_interface is not None:
-            mouth_open(self.perception_interface, termination_event=None, timeout=600) # 10 minutes
+            mouth_open(self.perception_interface, termination_event=self._cancel_event, timeout=600) # 10 minutes
+        self._check_cancel()
 
         # move to infront of mouth
         head_perception_data = None
         while head_perception_data is None:
+            self._check_cancel()
             head_perception_data = self.perception_interface.run_head_perception()
             if head_perception_data is None:
                 print("Head perception returned no result, retrying...")

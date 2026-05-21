@@ -118,12 +118,12 @@ class ArmInterfaceClient:
             "ee_pose": self._latest_ee_pose,
         }
 
-    def execute_command(self, cmd: KinovaCommand) -> bool:
+    def execute_command(self, cmd: KinovaCommand, cancel_event=None) -> bool:
         if isinstance(cmd, JointCommand):
-            return self._send_joint_command(cmd)
+            return self._send_joint_command(cmd, cancel_event=cancel_event)
 
         if isinstance(cmd, CartesianCommand):
-            return self._send_cartesian_command(cmd)
+            return self._send_cartesian_command(cmd, cancel_event=cancel_event)
 
         if isinstance(cmd, OpenGripperCommand):
             return self._call_trigger(self.open_gripper_client, "/arm/open_gripper")
@@ -138,6 +138,7 @@ class ArmInterfaceClient:
         cmd: JointCommand,
         timeout_sec: float = 15.0,
         position_tolerance: float = 0.02,
+        cancel_event=None,
     ) -> bool:
         if len(cmd.pos) == 0:
             raise ValueError("JointCommand.pos cannot be empty")
@@ -159,6 +160,16 @@ class ArmInterfaceClient:
         start_time = time.time()
 
         while time.time() - start_time <= timeout_sec:
+            if cancel_event is not None and cancel_event.is_set():
+                self.node.get_logger().info("JointCommand cancelled — holding current position")
+                joint_state = self._latest_joint_state
+                if joint_state is not None:
+                    stop_msg = JointState()
+                    stop_msg.header.stamp = self.node.get_clock().now().to_msg()
+                    stop_msg.position = list(joint_state.position)
+                    self.joint_pub.publish(stop_msg)
+                return False
+
             joint_state = self._latest_joint_state
 
             if joint_state is not None and self._joint_goal_reached(
@@ -185,6 +196,7 @@ class ArmInterfaceClient:
         cmd: CartesianCommand,
         timeout_sec: float = 15.0,
         pose_tolerance: float = 0.01,
+        cancel_event=None,
     ) -> bool:
         if len(cmd.pos) != 3:
             raise ValueError("CartesianCommand.pos must have length 3: [x, y, z]")
@@ -226,6 +238,12 @@ class ArmInterfaceClient:
         start_time = time.time()
 
         while time.time() - start_time <= timeout_sec:
+            if cancel_event is not None and cancel_event.is_set():
+                self.node.get_logger().info(
+                    "CartesianCommand cancelled — motion may still be completing"
+                )
+                return False
+
             ee_pose = self._latest_ee_pose
 
             if ee_pose is not None and self._cartesian_goal_reached(

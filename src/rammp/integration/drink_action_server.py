@@ -5,7 +5,7 @@ import threading
 
 import rclpy
 from rclpy.node import Node
-from rclpy.action import ActionServer
+from rclpy.action import ActionServer, CancelResponse
 from rclpy.executors import MultiThreadedExecutor
 
 from std_srvs.srv import SetBool
@@ -21,6 +21,7 @@ import rammp
 import rammp.simulation.scene_description as _scene_description_mod
 from rammp.simulation.simulator import FeedingDeploymentPyBulletSimulator
 
+from rammp.actions.base import ActionCancelledError
 from rammp.actions.bring_cup_to_mouth import BringCupToMouthAction
 from rammp.actions.grab_cup_from_table import GrabCupFromTableAction
 from rammp.actions.home_cup import HomeCupAction
@@ -98,6 +99,7 @@ class DrinkActionServers(Node):
             DrinkAction,
             "/arm/drink/pickup_and_order",
             self.execute_pickup_and_order,
+            cancel_callback=self._make_cancel_callback("PickupAndOrder"),
         )
 
         self.grab_cup_from_table_server = ActionServer(
@@ -105,6 +107,7 @@ class DrinkActionServers(Node):
             DrinkAction,
             "/arm/drink/grab_cup_from_table",
             self.execute_grab_cup_from_table,
+            cancel_callback=self._make_cancel_callback("GrabCupFromTable"),
         )
 
         self.locate_cup_server = ActionServer(
@@ -112,6 +115,7 @@ class DrinkActionServers(Node):
             DrinkAction,
             "/arm/drink/locate_cup",
             self.execute_locate_cup,
+            cancel_callback=self._make_cancel_callback("LocateCup"),
         )
 
         self._streaming = False
@@ -128,6 +132,7 @@ class DrinkActionServers(Node):
             DrinkAction,
             "/arm/drink/bring_cup_to_mouth",
             self.execute_bring_cup_to_mouth,
+            cancel_callback=self._make_cancel_callback("BringCupToMouth"),
         )
 
         self.home_cup_server = ActionServer(
@@ -135,6 +140,7 @@ class DrinkActionServers(Node):
             DrinkAction,
             "/arm/drink/home_cup",
             self.execute_home_cup,
+            cancel_callback=self._make_cancel_callback("HomeCup"),
         )
 
         self.put_cup_back_to_holder_server = ActionServer(
@@ -142,6 +148,7 @@ class DrinkActionServers(Node):
             DrinkAction,
             "/arm/drink/put_cup_back_to_holder",
             self.execute_put_cup_back_to_holder,
+            cancel_callback=self._make_cancel_callback("PutCupBackToHolder"),
         )
 
         self.get_logger().info("All drink action servers are up.")
@@ -165,17 +172,35 @@ class DrinkActionServers(Node):
         goal_handle.abort()
         return result
 
+    def _finish_canceled(self, goal_handle, msg: str):
+        result = DrinkAction.Result()
+        result.success = False
+        result.message = msg
+        goal_handle.canceled()
+        return result
+
+    def _make_cancel_callback(self, hla_name: str):
+        def cancel_callback(_goal_handle):
+            self.get_logger().info(f"Cancel requested for {hla_name}")
+            self.hla_name_to_hla[hla_name].request_cancel()
+            return CancelResponse.ACCEPT
+        return cancel_callback
+
     def execute_pickup_and_order(self, goal_handle):
         self.get_logger().info(
             f"pickup_and_order goal received: {goal_handle.request.request_id}"
         )
+        hla = self.hla_name_to_hla["PickupAndOrder"]
+        hla.clear_cancel()
         self._publish_dummy_feedback(goal_handle, "starting pickup_and_order")
         try:
-            self.hla_name_to_hla["PickupAndOrder"].execute_action()
+            hla.execute_action()
             return self._finish_success(
                 goal_handle,
                 "pickup_and_order dummy implementation complete",
             )
+        except ActionCancelledError:
+            return self._finish_canceled(goal_handle, "pickup_and_order cancelled")
         except Exception as exc:
             self.get_logger().error(f"pickup_and_order failed: {exc}")
             return self._finish_abort(
@@ -187,13 +212,17 @@ class DrinkActionServers(Node):
         self.get_logger().info(
             f"grab_cup_from_table goal received: {goal_handle.request.request_id}"
         )
+        hla = self.hla_name_to_hla["GrabCupFromTable"]
+        hla.clear_cancel()
         self._publish_dummy_feedback(goal_handle, "starting grab_cup_from_table")
         try:
-            self.hla_name_to_hla["GrabCupFromTable"].execute_action()
+            hla.execute_action()
             return self._finish_success(
                 goal_handle,
                 "grab_cup_from_table dummy implementation complete",
             )
+        except ActionCancelledError:
+            return self._finish_canceled(goal_handle, "grab_cup_from_table cancelled")
         except Exception as exc:
             self.get_logger().error(f"grab_cup_from_table failed: {exc}")
             return self._finish_abort(
@@ -205,13 +234,17 @@ class DrinkActionServers(Node):
         self.get_logger().info(
             f"locate_cup goal received: {goal_handle.request.request_id}"
         )
+        hla = self.hla_name_to_hla["LocateCup"]
+        hla.clear_cancel()
         self._publish_dummy_feedback(goal_handle, "starting locate_cup")
         try:
-            self.hla_name_to_hla["LocateCup"].execute_action()
+            hla.execute_action()
             return self._finish_success(
                 goal_handle,
                 "locate_cup complete",
             )
+        except ActionCancelledError:
+            return self._finish_canceled(goal_handle, "locate_cup cancelled")
         except Exception as exc:
             self.get_logger().error(f"locate_cup failed: {exc}")
             return self._finish_abort(
@@ -257,13 +290,17 @@ class DrinkActionServers(Node):
         self.get_logger().info(
             f"bring_cup_to_mouth goal received: {goal_handle.request.request_id}"
         )
+        hla = self.hla_name_to_hla["BringCupToMouth"]
+        hla.clear_cancel()
         self._publish_dummy_feedback(goal_handle, "starting bring_cup_to_mouth")
         try:
-            self.hla_name_to_hla["BringCupToMouth"].execute_action()
+            hla.execute_action()
             return self._finish_success(
                 goal_handle,
                 "bring_cup_to_mouth dummy implementation complete",
             )
+        except ActionCancelledError:
+            return self._finish_canceled(goal_handle, "bring_cup_to_mouth cancelled")
         except Exception as exc:
             self.get_logger().error(f"bring_cup_to_mouth failed: {exc}")
             return self._finish_abort(
@@ -275,13 +312,17 @@ class DrinkActionServers(Node):
         self.get_logger().info(
             f"home_cup goal received: {goal_handle.request.request_id}"
         )
+        hla = self.hla_name_to_hla["HomeCup"]
+        hla.clear_cancel()
         self._publish_dummy_feedback(goal_handle, "starting home_cup")
         try:
-            self.hla_name_to_hla["HomeCup"].execute_action()
+            hla.execute_action()
             return self._finish_success(
                 goal_handle,
                 "home_cup dummy implementation complete",
             )
+        except ActionCancelledError:
+            return self._finish_canceled(goal_handle, "home_cup cancelled")
         except Exception as exc:
             self.get_logger().error(f"home_cup failed: {exc}")
             return self._finish_abort(
@@ -293,13 +334,17 @@ class DrinkActionServers(Node):
         self.get_logger().info(
             f"put_cup_back_to_holder goal received: {goal_handle.request.request_id}"
         )
+        hla = self.hla_name_to_hla["PutCupBackToHolder"]
+        hla.clear_cancel()
         self._publish_dummy_feedback(goal_handle, "starting put_cup_back_to_holder")
         try:
-            self.hla_name_to_hla["PutCupBackToHolder"].execute_action()
+            hla.execute_action()
             return self._finish_success(
                 goal_handle,
                 "put_cup_back_to_holder dummy implementation complete",
             )
+        except ActionCancelledError:
+            return self._finish_canceled(goal_handle, "put_cup_back_to_holder cancelled")
         except Exception as exc:
             self.get_logger().error(f"put_cup_back_to_holder failed: {exc}")
             return self._finish_abort(
