@@ -4,6 +4,8 @@ No ROS or MediaPipe imports — this module is independently unit-testable.
 All 3D points/transforms are in meters.
 """
 
+from collections import deque
+
 import numpy as np
 from scipy.spatial.transform import Rotation
 
@@ -28,9 +30,9 @@ def orthonormalize(transform: np.ndarray) -> np.ndarray:
     return result
 
 
-def matrix_to_pose(transform: np.ndarray):
+def matrix_to_pose(transform: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     """Convert a 4x4 transform to ((x, y, z), (qx, qy, qz, qw))."""
-    position = transform[:3, 3]
+    position = transform[:3, 3].copy()
     quat = Rotation.from_matrix(transform[:3, :3]).as_quat()
     return position, quat
 
@@ -42,13 +44,14 @@ def pose_to_matrix(position, orientation) -> np.ndarray:
     )
 
 
-def kabsch_fixed_scale(target: np.ndarray, source: np.ndarray):
+def kabsch_fixed_scale(target: np.ndarray, source: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     """Best-fit rigid transform (rotation, translation) mapping source -> target.
 
     target, source: (N, 3) arrays of corresponding points. Returns (R 3x3, t 3,)
     such that target ~= R @ source + t.
     """
-    assert target.shape == source.shape and target.shape[1] == 3
+    if target.shape != source.shape or target.shape[1] != 3:
+        raise ValueError("target and source must be matching (N, 3) arrays")
     target_centroid = target.mean(axis=0)
     source_centroid = source.mean(axis=0)
     rotation, _ = Rotation.align_vectors(
@@ -64,7 +67,7 @@ def kabsch_with_rejection(
     source: np.ndarray,
     residual_threshold_m: float = 0.02,
     min_points: int = 20,
-):
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Kabsch fit with one outlier-rejection refit pass.
 
     Returns (R, t, keep_mask). Points whose residual exceeds the threshold are
@@ -123,7 +126,7 @@ def backproject_landmarks(
     return points
 
 
-def head_frame_to_pose(head_frame: np.ndarray):
+def head_frame_to_pose(head_frame: np.ndarray) -> tuple[float, float, float, float, float, float]:
     """Convert a 4x4 head frame to (x, y, z, a, b, c) with 'yxz' Euler degrees.
 
     The Euler convention matches how bring_cup_to_mouth reconstructs the pose
@@ -146,17 +149,18 @@ def build_calibration(
     ee_pose_matrix: np.ndarray,
     base_to_camera: np.ndarray,
     tool_frame_to_tip_matrix: np.ndarray,
-):
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Compute the three calibration artifacts from a captured frame.
 
     rigid_camera_points: (N, 3) back-projected rigid landmarks (camera frame,
         meters); NaN entries allowed for landmarks without valid depth.
     ee_pose_matrix: 4x4 end-effector (tool wrist) pose in the base frame.
-    base_to_camera: 4x4 transform, base frame -> camera frame.
+    base_to_camera: 4x4 transform — the camera's pose in the base frame; a
+        camera-frame point p_cam maps to base coordinates as base_to_camera @ p_cam.
     tool_frame_to_tip_matrix: 4x4 transform, wrist frame -> drink-tip frame.
 
     Returns (reference_points, reference_head_frame, tool_tip_transform):
-      - reference_points: rigid_camera_points unchanged (saved as the reference).
+      - reference_points: a copy of rigid_camera_points (saved as the reference).
       - reference_head_frame: 4x4, origin at the centroid of valid points,
         identity rotation, in the camera frame.
       - tool_tip_transform: 4x4 drink-tip pose in the camera frame.
@@ -168,7 +172,7 @@ def build_calibration(
     camera_to_base = np.linalg.inv(base_to_camera)
     tool_tip_transform = camera_to_base @ tool_tip_base
 
-    return rigid_camera_points, reference_head_frame, tool_tip_transform
+    return rigid_camera_points.copy(), reference_head_frame, tool_tip_transform
 
 
 class TransformSmoother:
@@ -187,10 +191,10 @@ class TransformSmoother:
         self.buffer_size = buffer_size
         self.std_threshold_m = std_threshold_m
         self.jump_threshold_m = jump_threshold_m
-        self._buffer: list[np.ndarray] = []
+        self._buffer: deque[np.ndarray] = deque(maxlen=buffer_size)
         self._last: np.ndarray | None = None
 
-    def update(self, transform: np.ndarray):
+    def update(self, transform: np.ndarray) -> tuple[np.ndarray, bool]:
         """Feed a raw 4x4 transform; return (smoothed_transform, is_noisy)."""
         if self._last is not None:
             jump = np.linalg.norm(transform[:3, 3] - self._last[:3, 3])
@@ -198,8 +202,6 @@ class TransformSmoother:
                 return self._last, True
 
         self._buffer.append(transform)
-        if len(self._buffer) > self.buffer_size:
-            self._buffer.pop(0)
 
         stacked = np.array(self._buffer)
         position_std = stacked[:, :3, 3].std(axis=0)

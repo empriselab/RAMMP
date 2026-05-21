@@ -104,3 +104,20 @@ def test_build_calibration_outputs():
     np.testing.assert_allclose(ref_pts, rigid)
     np.testing.assert_allclose(ref_frame[:3, 3], rigid.mean(axis=0))
     np.testing.assert_allclose(tip_tf[:3, 3], [0.3, 0.0, 0.2], atol=1e-9)
+
+
+def test_backproject_landmarks_offcenter():
+    depth = np.full((480, 640), 1000.0, dtype=np.float32)  # 1.0 m, in mm
+    pts = hg.backproject_landmarks(
+        np.array([[330.0, 250.0]]), depth, fx=500.0, fy=500.0, cx=320.0, cy=240.0
+    )
+    # X = (1.0 / 500) * (330 - 320) = 0.02 ; Y = (1.0 / 500) * (250 - 240) = 0.02
+    np.testing.assert_allclose(pts[0], [0.02, 0.02, 1.0], atol=1e-9)
+
+
+def test_head_frame_to_pose_roundtrips_yxz_euler():
+    rotation = Rotation.from_euler("yxz", [15.0, -10.0, 5.0], degrees=True).as_matrix()
+    head_frame = hg.make_transform(rotation, np.array([1.0, 2.0, 3.0]))
+    pose = hg.head_frame_to_pose(head_frame)
+    np.testing.assert_allclose(pose[:3], [1.0, 2.0, 3.0], atol=1e-9)
+    np.testing.assert_allclose(pose[3:], [15.0, -10.0, 5.0], atol=1e-6)
