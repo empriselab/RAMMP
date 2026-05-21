@@ -10,6 +10,8 @@ from scipy.spatial.transform import Rotation
 from sklearn.cluster import DBSCAN   # <-- ADDED
 import open3d as o3d
 
+from rammp.utils.timing import timer
+
 class DrinkPerception():
     def __init__(self):
         pass
@@ -33,15 +35,17 @@ class DrinkPerception():
         # -----------------------------
         # Color mask
         # -----------------------------
-        mask = self.detect_handle_color(rgb_image)
+        with timer("drink/color_mask"):
+            mask = self.detect_handle_color(rgb_image)
 
         # save mask for debugging (overlay on RGB)
-        vis = rgb_image.copy()
-        vis[mask > 0] = (0, 255, 0)
-        cv2.imwrite("color_mask.png", vis)
+        with timer("drink/debug_imwrite"):
+            vis = rgb_image.copy()
+            vis[mask > 0] = (0, 255, 0)
+            cv2.imwrite("color_mask.png", vis)
 
-
-        mask = self.clean_mask(mask)
+        with timer("drink/clean_mask"):
+            mask = self.clean_mask(mask)
 
         # -----------------------------
         # Extract ALL 3D points from mask
@@ -49,13 +53,14 @@ class DrinkPerception():
         points_3d = []
         pixels = []
 
-        ys, xs = np.where(mask > 0)
-        for u, v in zip(xs, ys):
-            ok, p = self.pixel2World(
-                camera_info, u, v, depth_image)
-            if ok:
-                points_3d.append(p)
-                pixels.append((u, v))
+        with timer("drink/backproject"):
+            ys, xs = np.where(mask > 0)
+            for u, v in zip(xs, ys):
+                ok, p = self.pixel2World(
+                    camera_info, u, v, depth_image)
+                if ok:
+                    points_3d.append(p)
+                    pixels.append((u, v))
 
         if len(points_3d) == 0:
             # rospy.logwarn("No valid 3D points from mask.")
@@ -69,10 +74,11 @@ class DrinkPerception():
         # -----------------------------
         # DBSCAN clustering (7 cm)
         # -----------------------------
-        clustering = DBSCAN(
-            eps=0.07,
-            min_samples=50
-        ).fit(points_3d)
+        with timer("drink/dbscan"):
+            clustering = DBSCAN(
+                eps=0.07,
+                min_samples=50
+            ).fit(points_3d)
 
         # print("Ran DBSCAN")
 
@@ -101,21 +107,22 @@ class DrinkPerception():
         cluster_mask = cv2.dilate(
             cluster_mask, np.ones((3, 3), np.uint8), iterations=1)
 
-        vis = rgb_image.copy()
-        vis[cluster_mask > 0] = (0, 0, 255)
-
-        cv2.imwrite("handle_mask.png", vis)
+        with timer("drink/debug_imwrite"):
+            vis = rgb_image.copy()
+            vis[cluster_mask > 0] = (0, 0, 255)
+            cv2.imwrite("handle_mask.png", vis)
         # rospy.loginfo(
         #     f"Saved handle_mask.png with {cluster_pixels.shape[0]} pixels")
-        
-        pcd = o3d.geometry.PointCloud()
-        pcd.points = o3d.utility.Vector3dVector(cluster_points_3d)
 
-        plane_model, inliers = pcd.segment_plane(
-            distance_threshold=0.003,
-            ransac_n=3,
-            num_iterations=500
-        )
+        with timer("drink/ransac_plane"):
+            pcd = o3d.geometry.PointCloud()
+            pcd.points = o3d.utility.Vector3dVector(cluster_points_3d)
+
+            plane_model, inliers = pcd.segment_plane(
+                distance_threshold=0.003,
+                ransac_n=3,
+                num_iterations=500
+            )
 
         plane_cloud = pcd.select_by_index(inliers)
         non_plane_cloud = pcd.select_by_index(inliers, invert=True)

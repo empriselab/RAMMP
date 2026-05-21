@@ -27,6 +27,8 @@ from skimage.transform import (
 )
 from tqdm import tqdm
 
+from rammp.utils.timing import timer
+
 plt.switch_backend("agg")
 
 # ignore warnings
@@ -184,7 +186,8 @@ class HeadPerception:
             tform = torch.inverse(tform).transpose(1, 2).to(self.device)
 
             with torch.no_grad():
-                codedict = self.deca.encode(images, use_detail=False)
+                with timer("head/deca_encode"):
+                    codedict = self.deca.encode(images, use_detail=False)
 
             return codedict, tform, images, input_image["src_pts"]
 
@@ -196,7 +199,8 @@ class HeadPerception:
         # original_images = torch.tensor(image/255).float().to(self.device)[None,...]
 
         with torch.no_grad():
-            orig_opdict, orig_visdict = self.deca.minimal_decode(codedict, tform=tform)
+            with timer("head/deca_decode"):
+                orig_opdict, orig_visdict = self.deca.minimal_decode(codedict, tform=tform)
 
         h = 720
         w = 1280
@@ -666,7 +670,8 @@ class HeadPerception:
 
         h, w, _ = image.shape
         if iscrop:
-            bbox, bbox_type = self.face_detector_model.run(image)
+            with timer("head/face_detect"):
+                bbox, bbox_type = self.face_detector_model.run(image)
             if len(bbox) < 4:
                 # print("no face detected! returning none")
                 return None

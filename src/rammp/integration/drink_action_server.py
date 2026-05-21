@@ -21,6 +21,8 @@ import rammp
 import rammp.simulation.scene_description as _scene_description_mod
 from rammp.simulation.simulator import FeedingDeploymentPyBulletSimulator
 
+from rammp.utils.timing import print_summary
+
 from rammp.actions.base import ActionCancelledError
 from rammp.actions.bring_cup_to_mouth import BringCupToMouthAction
 from rammp.actions.grab_cup_from_table import GrabCupFromTableAction
@@ -272,6 +274,7 @@ class DrinkActionServers(Node):
                 self._stream_thread.join(timeout=2.0)
                 self._stream_thread = None
             self.get_logger().info("cup handle streaming stopped")
+            print_summary()
             response.success = True
             response.message = "streaming stopped"
         return response

@@ -13,6 +13,7 @@ from rammp.interfaces.realsense_interface import RealSenseInterface
 
 from rammp.perception.drink_perception.drink_perception import DrinkPerception
 from rammp.perception.head_perception.deca_perception import HeadPerception
+from rammp.utils.timing import timer
 
 class PerceptionInterface:
     """An interface for perception (robot joints, human head poses, etc.)."""
@@ -59,15 +60,16 @@ class PerceptionInterface:
         camera_data = self.realsense_interface.get_camera_data()
         base_to_camera = self.realsense_interface.get_base_to_camera_transform()
 
-        head_perception_data = self._head_perception.run_deca(
-            camera_data["rgb_image"],
-            camera_data["camera_info"],
-            camera_data["depth_image"],
-            base_to_camera,
-            debug_print=False,
-            visualize=False,
-            filter_noisy_readings=False,
-        )
+        with timer("head/run_head_perception_total"):
+            head_perception_data = self._head_perception.run_deca(
+                camera_data["rgb_image"],
+                camera_data["camera_info"],
+                camera_data["depth_image"],
+                base_to_camera,
+                debug_print=False,
+                visualize=False,
+                filter_noisy_readings=False,
+            )
 
         if head_perception_data is not None:
             head_perception_data = {
@@ -166,12 +168,13 @@ class PerceptionInterface:
             for _ in range(num_samples):
                 camera_data = self.realsense_interface.get_camera_data()
                 base_to_camera = self.realsense_interface.get_base_to_camera_transform()
-                aruco_pose, bounding_box = self._drink_perception.run_perception(
-                    camera_data["rgb_image"],
-                    camera_data["camera_info"],
-                    camera_data["depth_image"],
-                    base_to_camera,
-                )
+                with timer("drink/run_perception_total"):
+                    aruco_pose, bounding_box = self._drink_perception.run_perception(
+                        camera_data["rgb_image"],
+                        camera_data["camera_info"],
+                        camera_data["depth_image"],
+                        base_to_camera,
+                    )
                 if aruco_pose is not None:
                     self.aruco_pose = aruco_pose
                     self.last_bounding_box = bounding_box
