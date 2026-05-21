@@ -81,6 +81,13 @@ class MediaPipeHeadPerception:
         self.tool_tip_transform = np.load(
             os.path.join(tool_dir, required["tool_tip_transform"])
         )
+        expected_rows = len(self._rigid_indices)
+        if self.reference_points.shape != (expected_rows, 3):
+            raise ValueError(
+                f"reference_landmarks_camera.npy for tool '{tool}' has shape "
+                f"{self.reference_points.shape}, expected ({expected_rows}, 3). "
+                f"Re-run the calibration."
+            )
 
     def detect_landmarks(self, bgr_image: np.ndarray):
         """Run MediaPipe on a BGR image.
@@ -132,7 +139,7 @@ class MediaPipeHeadPerception:
         )
         return rigid_points, landmarks_px, jaw_open_score
 
-    def run(self, rgb_image, camera_info, depth_image, base_to_camera):
+    def run(self, bgr_image, camera_info, depth_image, base_to_camera: np.ndarray | None):
         """Run one head-perception cycle.
 
         Returns a dict with keys head_pose, tool_tip_target_pose, landmarks2d,
@@ -145,7 +152,7 @@ class MediaPipeHeadPerception:
         if base_to_camera is None:
             return None
 
-        result = self.rigid_landmark_points(rgb_image, depth_image, camera_info)
+        result = self.rigid_landmark_points(bgr_image, depth_image, camera_info)
         if result is None:
             return None
         rigid_points, landmarks_px, jaw_open_score = result
@@ -170,7 +177,7 @@ class MediaPipeHeadPerception:
 
         return {
             "head_pose": hg.head_frame_to_pose(head_frame_base),
-            "tool_tip_target_pose": tool_tip_target_base,
+            "tool_tip_target_pose": tool_tip_target_base,  # 4x4 ndarray, base frame
             "landmarks2d": landmarks_px,
             "jaw_open_score": jaw_open_score,
             "noisy_reading": noisy_reading,
