@@ -140,7 +140,7 @@ class PerceptionInterface:
         drink_poses['place_pre_grasp_pose'] = self.get_aruco_relative_pose(self._get_place_pre_grasp_transform(), "drink")
         return drink_poses
 
-    def perceive_cup_info(self, num_samples: int = 3) -> CupInfo:
+    def perceive_cup_info(self, num_samples: int = 1) -> CupInfo:
         cup_info = CupInfo()
         cup_info.success = False
         cup_info.bounding_box = [0, 0, 0, 0]

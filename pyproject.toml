@@ -25,7 +25,6 @@ full = [
     "prpl-utils@git+https://github.com/Princeton-Robot-Planning-and-Learning/prpl-mono.git#subdirectory=prpl-utils",
     "tomsutils@git+https://github.com/tomsilver/toms-utils.git",
     "opencv-python",
-    "scikit-learn",
     "open3d",
     "numpy",
     "scipy",
