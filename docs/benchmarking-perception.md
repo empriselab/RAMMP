@@ -111,7 +111,44 @@ summary prints on exit.
 
 ---
 
-## 5. Before / after comparison
+## 5. Head perception in isolation (no action server)
+
+A standalone driver lives at `scripts/benchmark_head_perception.py`. It calls
+`PerceptionInterface.run_head_perception()` in a tight loop against the live
+RealSense feed — no action server, no manual triggering — and prints the same
+timing summary plus the wall-clock throughput (Hz) and success rate at the
+end.
+
+```bash
+# With the RealSense camera publishing, on the branch tip:
+python3 scripts/benchmark_head_perception.py --iterations 200 --warmup 10
+```
+
+The script spins the node on a background `MultiThreadedExecutor` so fresh
+camera frames keep arriving during the loop. It calls `timing.reset()` after
+init (to discard the warm-start samples `PerceptionInterface.__init__` already
+accumulates) and again after the explicit warm-up phase, so the reported
+numbers reflect steady-state perception only.
+
+**Using the script at the "before" commit (`9cd9042`):** the script is
+committed on the branch tip, but the API it touches (`run_head_perception`)
+is the same at `9cd9042`. Copy it out before checking out the older commit:
+
+```bash
+cp scripts/benchmark_head_perception.py /tmp/
+git checkout 9cd9042
+python3 /tmp/benchmark_head_perception.py --iterations 200
+git checkout feature/improve-performance
+```
+
+Prerequisites: same as Section 3 (live camera, `simulation=False` path —
+which this script forces by construction, and the appropriate calibration:
+the committed DECA calibration at `9cd9042`, or a MediaPipe calibration
+recorded once on the robot at the branch tip).
+
+---
+
+## 6. Before / after comparison
 
 The performance work is bracketed by two commits on `feature/improve-performance`:
 
@@ -121,10 +158,14 @@ The performance work is bracketed by two commits on `feature/improve-performance
   — the timing harness is present, but the original DECA head perception and
   the unoptimized cup detection are still in place.
 
+For head perception specifically, the dedicated script in Section 5 is the
+cleanest way to do the comparison — it removes the action-server hop and lets
+the loop run at the underlying perception speed at both commits.
+
 Procedure:
 
 ```bash
-# 1. Benchmark "after" (section 4 above). Save the table.
+# 1. Benchmark "after" (Section 4 or Section 5). Save the table.
 
 # 2. Switch to the "before" state.
 git checkout 9cd9042
@@ -172,7 +213,7 @@ where the time went.
 
 ---
 
-## 6. Notes
+## 7. Notes
 
 - A no-hardware micro-benchmark is not representative: the committed
   `src/rammp/perception/drink_perception/{rgb,depth}.png` fixture's cup color
