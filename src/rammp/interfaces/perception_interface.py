@@ -33,8 +33,8 @@ class PerceptionInterface:
             while self.realsense_interface.get_camera_data()["rgb_image"] is None:
                 rclpy.spin_once(self.node, timeout_sec=0.1)
             self.node.get_logger().info("Camera data received, warm-starting head perception.")
-            for _ in range(10):
-                self.run_head_perception()
+            warm_ok = sum(self.run_head_perception() is not None for _ in range(10))
+            self.node.get_logger().info(f"Head perception warm-start: {warm_ok}/10 frames succeeded.")
 
             self._drink_perception = DrinkPerception()
         else:
@@ -81,6 +81,10 @@ class PerceptionInterface:
                     pickle.dump(head_perception_data, f)
             return head_perception_data
         else:
+            self.node.get_logger().warning(
+                f"Head perception returned nothing: {self._head_perception.last_failure}",
+                throttle_duration_sec=1.0,
+            )
             return None
 
     def _get_drink_transform(self):

@@ -138,7 +138,11 @@ class RealSenseInterface:
             tf2_ros.ConnectivityException,
             tf2_ros.ExtrapolationException,
             tf2_ros.TransformException,
-        ):
+        ) as e:
+            self.node.get_logger().warning(
+                f"TF lookup base_link->{target_frame} failed: {type(e).__name__}: {e}",
+                throttle_duration_sec=1.0,
+            )
             return None
         
 def main(args=None):

@@ -50,6 +50,9 @@ class MediaPipeHeadPerception:
         self.reference_head_frame: np.ndarray | None = None
         self.tool_tip_transform: np.ndarray | None = None
 
+        # Why the most recent run() returned None (for diagnostics); None on success.
+        self.last_failure: str | None = None
+
     def set_tool(self, tool: str) -> None:
         """Load the calibration files recorded for the given tool."""
         self.tool = tool
@@ -150,10 +153,12 @@ class MediaPipeHeadPerception:
                 "MediaPipeHeadPerception.set_tool() must be called before run()."
             )
         if base_to_camera is None:
+            self.last_failure = "base_link->camera transform unavailable"
             return None
 
         result = self.rigid_landmark_points(bgr_image, depth_image, camera_info)
         if result is None:
+            self.last_failure = "no face detected"
             return None
         rigid_points, landmarks_px, jaw_open_score = result
 
@@ -161,7 +166,13 @@ class MediaPipeHeadPerception:
             self.reference_points
         ).any(axis=1)
         if int(valid.sum()) < _MIN_VALID_LANDMARKS:
+            self.last_failure = (
+                f"only {int(valid.sum())}/{len(valid)} rigid landmarks have valid "
+                f"depth in both live and calibration frames (need "
+                f"{_MIN_VALID_LANDMARKS}); jawOpen={jaw_open_score:.2f}"
+            )
             return None
+        self.last_failure = None
 
         rotation, translation, _ = hg.kabsch_with_rejection(
             rigid_points[valid], self.reference_points[valid]
