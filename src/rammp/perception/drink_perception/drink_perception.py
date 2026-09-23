@@ -4,7 +4,6 @@ import cv2
 import numpy as np
 from scipy.spatial.transform import Rotation
 import open3d as o3d
-from sklearn.cluster import DBSCAN
 
 from rammp.perception.drink_perception import drink_geometry as dg
 from rammp.utils.timing import timer
@@ -38,6 +37,8 @@ class DrinkPerception():
 
     def run_perception(self, rgb_image, camera_info, depth_image, base_to_camera_transform):
         self.last_mask = None
+        if base_to_camera_transform is None:
+            return None, None
         # -----------------------------
         # Color mask
         # -----------------------------
@@ -68,7 +69,7 @@ class DrinkPerception():
             return None, None
 
         with timer("drink/cluster"):
-            labels = DBSCAN(eps=0.07, min_samples=50).fit(points_3d).labels_
+            labels = dg.cluster_points(points_3d, pixels, eps=0.07, min_samples=50)
         valid = labels >= 0
         if not np.any(valid):
             return None, None
