@@ -36,8 +36,17 @@ class PerceptionInterface:
             # Warm start head perception — wait until camera data is available
             self._head_perception.set_tool("drink")
             self.node.get_logger().info("Waiting for camera data before warm-starting head perception...")
+            # Wait as long as it takes: the wrist RealSense may be (re)starting
+            # after this node, and crashing here would just need a relaunch.
+            waited_since = time.time()
             while self.realsense_interface.get_camera_data()["rgb_image"] is None:
                 rclpy.spin_once(self.node, timeout_sec=0.1)
+                if time.time() - waited_since > 10.0:
+                    waited_since = time.time()
+                    self.node.get_logger().warning(
+                        "Still waiting for /camera/wrist/color/image_raw (+camera_info, "
+                        "aligned depth). Is the wrist RealSense running?"
+                    )
             self.node.get_logger().info("Camera data received, warm-starting head perception.")
             warm_ok = sum(self.run_head_perception() is not None for _ in range(10))
             self.node.get_logger().info(f"Head perception warm-start: {warm_ok}/10 frames succeeded.")
