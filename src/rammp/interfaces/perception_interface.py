@@ -4,6 +4,7 @@ import numpy as np
 from pybullet_helpers.geometry import Pose
 from scipy.spatial.transform import Rotation as R
 import pickle
+import time
 
 import rclpy
 from rclpy.node import Node
@@ -45,6 +46,10 @@ class PerceptionInterface:
         self.last_drink_poses = None
         self.aruco_pose = None
         self.last_bounding_box = [0, 0, 0, 0]
+        # Stamp of the last camera frame head perception processed, so callers
+        # that loop (e.g. mouth_open) run once per camera frame instead of
+        # re-running MediaPipe on the same image hundreds of times a second.
+        self._last_head_frame_stamp = None
 
     def run_head_perception(self, ):
         # print("Running Head Perception")
@@ -57,7 +62,9 @@ class PerceptionInterface:
                 raise FileNotFoundError("No transfer logged data found for tool: ", self.tool)
             return head_perception_data
 
-        camera_data = self.realsense_interface.get_camera_data()
+        camera_data = self._wait_for_new_camera_frame()
+        if camera_data is None:
+            return None
         base_to_camera = self.realsense_interface.get_base_to_camera_transform()
 
         with timer("head/run_head_perception_total"):
@@ -86,6 +93,27 @@ class PerceptionInterface:
                 throttle_duration_sec=1.0,
             )
             return None
+
+    def _wait_for_new_camera_frame(self, timeout_sec: float = 0.5):
+        """Return camera data with a header stamp newer than the last one used.
+
+        Returns None if no new frame arrives within timeout_sec.
+        """
+        deadline = time.time() + timeout_sec
+        while True:
+            camera_data = self.realsense_interface.get_camera_data()
+            header = camera_data["header"]
+            stamp = None if header is None else (header.stamp.sec, header.stamp.nanosec)
+            if stamp is not None and stamp != self._last_head_frame_stamp:
+                self._last_head_frame_stamp = stamp
+                return camera_data
+            if time.time() >= deadline:
+                self.node.get_logger().warning(
+                    f"No new wrist camera frame in {timeout_sec} s; skipping head perception.",
+                    throttle_duration_sec=1.0,
+                )
+                return None
+            time.sleep(0.005)
 
     def _get_drink_transform(self):
         tf = np.zeros((4, 4))
