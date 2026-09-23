@@ -3,29 +3,6 @@ import numpy as np
 from rammp.perception.drink_perception import drink_geometry as dg
 
 
-def test_largest_blob_picks_bigger_component():
-    mask = np.zeros((40, 40), dtype=np.uint8)
-    mask[2:5, 2:5] = 255       # small component: 9 px
-    mask[10:25, 10:25] = 255   # big component: 225 px
-    blob = dg.largest_blob(mask, min_area=50)
-    assert blob is not None
-    assert blob.dtype == np.uint8
-    assert set(np.unique(blob)).issubset({0, 255})
-    assert int((blob > 0).sum()) == 225
-    assert blob[3, 3] == 0      # small component excluded
-    assert blob[15, 15] == 255
-
-
-def test_largest_blob_empty_mask_returns_none():
-    assert dg.largest_blob(np.zeros((20, 20), dtype=np.uint8), min_area=50) is None
-
-
-def test_largest_blob_below_min_area_returns_none():
-    mask = np.zeros((20, 20), dtype=np.uint8)
-    mask[1:3, 1:3] = 255        # 4 px
-    assert dg.largest_blob(mask, min_area=50) is None
-
-
 def test_backproject_mask_basic():
     mask = np.zeros((20, 20), dtype=np.uint8)
     mask[10, 10] = 255

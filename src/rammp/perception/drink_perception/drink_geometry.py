@@ -4,29 +4,7 @@ Only OpenCV and NumPy — no Open3D or scikit-learn — so these are
 independently unit-testable. All 3D points are in the camera frame, meters.
 """
 
-import cv2
 import numpy as np
-
-
-def largest_blob(mask: np.ndarray, min_area: int = 200) -> np.ndarray | None:
-    """Return a binary mask (uint8, values 0/255) of the largest connected
-    component of `mask`, or None if no component has at least `min_area`
-    pixels.
-
-    This replaces 3D DBSCAN clustering: the cup handle is a single connected
-    colored region in the image, so the largest 2D connected component is it.
-    """
-    num_labels, labels, stats, _ = cv2.connectedComponentsWithStats(
-        mask, connectivity=8
-    )
-    if num_labels <= 1:  # label 0 is background; nothing else found
-        return None
-    # stats row 0 is the background; search components 1..num_labels-1.
-    areas = stats[1:, cv2.CC_STAT_AREA]
-    largest_label = 1 + int(np.argmax(areas))
-    if int(stats[largest_label, cv2.CC_STAT_AREA]) < min_area:
-        return None
-    return (labels == largest_label).astype(np.uint8) * 255
 
 
 def backproject_mask(

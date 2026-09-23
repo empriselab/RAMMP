@@ -26,6 +26,7 @@ full = [
     "tomsutils@git+https://github.com/tomsilver/toms-utils.git",
     "opencv-python",
     "open3d",
+    "scikit-learn",
     "numpy",
     "scipy",
     "mediapipe",

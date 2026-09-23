@@ -4,14 +4,11 @@ import cv2
 import numpy as np
 from scipy.spatial.transform import Rotation
 import open3d as o3d
+from sklearn.cluster import DBSCAN
 
 from rammp.perception.drink_perception import drink_geometry as dg
 from rammp.utils.timing import timer
 
-# Smallest connected colored region (pixels) accepted as a candidate handle.
-_MIN_BLOB_AREA = 200
-# Fewest valid 3D points required to attempt a plane/pose fit.
-_MIN_CLUSTER_POINTS = 50
 
 
 class DrinkPerception():
@@ -57,26 +54,32 @@ class DrinkPerception():
         self.last_mask = mask
 
         # -----------------------------
-        # Largest connected blob (replaces 3D DBSCAN)
-        # -----------------------------
-        with timer("drink/cluster"):
-            cluster_mask = dg.largest_blob(mask, min_area=_MIN_BLOB_AREA)
-        if cluster_mask is None:
-            return None, None
-
-        # -----------------------------
-        # Back-project the blob to 3D (vectorized)
+        # Back-project every valid-depth mask pixel (vectorized), then cluster
+        # in 3D exactly as the original pipeline did: DBSCAN, 7 cm, >= 50 pts,
+        # keep the cluster with the most points.
         # -----------------------------
         fx = camera_info.k[0]
         fy = camera_info.k[4]
         cx = camera_info.k[2]
         cy = camera_info.k[5]
         with timer("drink/backproject"):
-            cluster_points_3d, cluster_pixels = dg.backproject_mask(
-                cluster_mask, depth_image, fx, fy, cx, cy
-            )
-        if len(cluster_points_3d) < _MIN_CLUSTER_POINTS:
+            points_3d, pixels = dg.backproject_mask(mask, depth_image, fx, fy, cx, cy)
+        if len(points_3d) == 0:
             return None, None
+
+        with timer("drink/cluster"):
+            labels = DBSCAN(eps=0.07, min_samples=50).fit(points_3d).labels_
+        valid = labels >= 0
+        if not np.any(valid):
+            return None, None
+        unique, counts = np.unique(labels[valid], return_counts=True)
+        main_label = unique[np.argmax(counts)]
+        cluster_pixels = pixels[labels == main_label]
+        cluster_points_3d = points_3d[labels == main_label]
+
+        cluster_mask = np.zeros(mask.shape, dtype=np.uint8)
+        cluster_mask[cluster_pixels[:, 1], cluster_pixels[:, 0]] = 255
+        cluster_mask = cv2.dilate(cluster_mask, np.ones((3, 3), np.uint8), iterations=1)
 
         if self.debug:
             vis = rgb_image.copy()
