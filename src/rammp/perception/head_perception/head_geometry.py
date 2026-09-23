@@ -179,7 +179,9 @@ class TransformSmoother:
     """Temporal smoother for the head-motion transform.
 
     Averages the last `buffer_size` transforms when the head is nearly still,
-    and rejects single frames that jump implausibly far.
+    and rejects an isolated frame that jumps implausibly far. A jump that
+    persists for `max_rejects` consecutive frames is real head motion (or a
+    new user) and is accepted, resetting the buffer.
     """
 
     def __init__(
@@ -187,19 +189,26 @@ class TransformSmoother:
         buffer_size: int = 10,
         std_threshold_m: float = 0.005,
         jump_threshold_m: float = 0.10,
+        max_rejects: int = 2,
     ) -> None:
         self.buffer_size = buffer_size
         self.std_threshold_m = std_threshold_m
         self.jump_threshold_m = jump_threshold_m
+        self.max_rejects = max_rejects
         self._buffer: deque[np.ndarray] = deque(maxlen=buffer_size)
         self._last: np.ndarray | None = None
+        self._reject_streak = 0
 
     def update(self, transform: np.ndarray) -> tuple[np.ndarray, bool]:
         """Feed a raw 4x4 transform; return (smoothed_transform, is_noisy)."""
         if self._last is not None:
             jump = np.linalg.norm(transform[:3, 3] - self._last[:3, 3])
             if jump > self.jump_threshold_m:
-                return self._last, True
+                self._reject_streak += 1
+                if self._reject_streak <= self.max_rejects:
+                    return self._last, True
+                self._buffer.clear()  # sustained jump: follow the head
+        self._reject_streak = 0
 
         self._buffer.append(transform)
 

@@ -121,3 +121,16 @@ def test_head_frame_to_pose_roundtrips_yxz_euler():
     pose = hg.head_frame_to_pose(head_frame)
     np.testing.assert_allclose(pose[:3], [1.0, 2.0, 3.0], atol=1e-9)
     np.testing.assert_allclose(pose[3:], [15.0, -10.0, 5.0], atol=1e-6)
+
+
+def test_smoother_follows_sustained_jump():
+    smoother = hg.TransformSmoother(jump_threshold_m=0.10, max_rejects=2)
+    near = hg.make_transform(np.eye(3), np.zeros(3))
+    far = hg.make_transform(np.eye(3), np.array([0.3, 0.0, 0.0]))
+    smoother.update(near)
+    out1, noisy1 = smoother.update(far)
+    out2, noisy2 = smoother.update(far)
+    out3, noisy3 = smoother.update(far)
+    assert noisy1 and noisy2 and not noisy3
+    np.testing.assert_allclose(out1[:3, 3], near[:3, 3])
+    np.testing.assert_allclose(out3[:3, 3], far[:3, 3])
