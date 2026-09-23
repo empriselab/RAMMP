@@ -23,6 +23,11 @@ class PerceptionInterface:
         self.node = node
         self.simulation = simulation
         self.log_dir = log_dir
+        # Stamp of the last camera frame head perception processed, so callers
+        # that loop (e.g. mouth_open) run once per camera frame instead of
+        # re-running MediaPipe on the same image hundreds of times a second.
+        # Must exist before the warm start below calls run_head_perception.
+        self._last_head_frame_stamp = None
 
         if not self.simulation:
             self.realsense_interface = RealSenseInterface(self.node)
@@ -46,10 +51,6 @@ class PerceptionInterface:
         self.last_drink_poses = None
         self.aruco_pose = None
         self.last_bounding_box = [0, 0, 0, 0]
-        # Stamp of the last camera frame head perception processed, so callers
-        # that loop (e.g. mouth_open) run once per camera frame instead of
-        # re-running MediaPipe on the same image hundreds of times a second.
-        self._last_head_frame_stamp = None
 
     def run_head_perception(self, ):
         # print("Running Head Perception")
