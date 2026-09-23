@@ -20,6 +20,10 @@ class DrinkPerception():
         # handle_mask.png to the working directory. Off by default — those
         # per-frame disk writes dominated the runtime.
         self.debug = debug
+        # Binary mask (uint8 0/255) of the handle blob from the latest
+        # run_perception call; all zeros when no blob was found. Streamed to
+        # the GUI as CupInfo.segmentation_mask.
+        self.last_mask = None
 
     def pose_to_matrix(self, pose):
         position = pose[0]
@@ -56,6 +60,7 @@ class DrinkPerception():
         # -----------------------------
         with timer("drink/cluster"):
             cluster_mask = dg.largest_blob(mask, min_area=_MIN_BLOB_AREA)
+        self.last_mask = cluster_mask if cluster_mask is not None else np.zeros_like(mask)
         if cluster_mask is None:
             return None, None
 

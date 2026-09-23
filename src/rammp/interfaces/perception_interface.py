@@ -181,6 +181,13 @@ class PerceptionInterface:
                     self.aruco_pose = aruco_pose
                     self.last_bounding_box = bounding_box
 
+            mask = self._drink_perception.last_mask
+            if mask is not None:
+                cup_info.segmentation_mask = self.realsense_interface.bridge.cv2_to_imgmsg(
+                    mask, encoding="mono8"
+                )
+                cup_info.segmentation_mask.header = camera_data["header"]
+
             if self.aruco_pose is not None:
                 cup_info.pose = [
                     float(self.aruco_pose[0][0]),
