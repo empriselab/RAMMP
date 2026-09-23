@@ -20,9 +20,9 @@ class DrinkPerception():
         # handle_mask.png to the working directory. Off by default — those
         # per-frame disk writes dominated the runtime.
         self.debug = debug
-        # Binary mask (uint8 0/255) of the handle blob from the latest
-        # *successful* run_perception call; None when that call found no cup.
-        # Streamed to the GUI as CupInfo.segmentation_mask.
+        # Cleaned HSV color mask (uint8 0/255) from the latest run_perception
+        # call, streamed to the GUI as CupInfo.segmentation_mask. Per frame:
+        # all zeros when nothing handle-colored is in view.
         self.last_mask = None
 
     def pose_to_matrix(self, pose):
@@ -54,6 +54,7 @@ class DrinkPerception():
 
         with timer("drink/clean_mask"):
             mask = self.clean_mask(mask)
+        self.last_mask = mask
 
         # -----------------------------
         # Largest connected blob (replaces 3D DBSCAN)
@@ -181,7 +182,6 @@ class DrinkPerception():
         x_max, y_max = cluster_pixels.max(axis=0)
         bounding_box = [int(x_min), int(y_min), int(x_max), int(y_max)]
 
-        self.last_mask = cluster_mask
         return self.matrix_to_pose(base_to_tag), bounding_box
 
     def detect_handle_color(self, bgr_image):
