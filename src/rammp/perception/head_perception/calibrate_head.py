@@ -10,6 +10,7 @@ captures one frame. Run with:
 import argparse
 import os
 
+import cv2
 import numpy as np
 import rclpy
 from rclpy.node import Node
@@ -80,7 +81,7 @@ def calibrate(tool: str, scene_config: str) -> None:
         node.get_logger().error("No face detected in the calibration frame.")
         rclpy.shutdown()
         return
-    rigid_points, _landmarks_px, _jaw = result
+    rigid_points, landmarks_px, _jaw = result
 
     valid_count = int((~np.isnan(rigid_points).any(axis=1)).sum())
     node.get_logger().info(f"Captured {valid_count} valid rigid landmarks.")
@@ -95,11 +96,42 @@ def calibrate(tool: str, scene_config: str) -> None:
         rigid_points, ee_pose_matrix, base_to_camera, tool_frame_to_tip
     )
 
+    # Self-check: the drink tip should sit at the detected mouth in this very
+    # frame. A large offset means the cup was not at the mouth, or the
+    # ee-pose / tool_frame_to_drink_tip / camera TF inputs disagree.
+    k = camera_data["camera_info"].k
+    mouth_cam = np.nanmean(
+        hg.backproject_landmarks(
+            landmarks_px[[13, 14]], camera_data["depth_image"],
+            fx=k[0], fy=k[4], cx=k[2], cy=k[5],
+        ),
+        axis=0,
+    )
+    tip_cam = tool_tip_transform[:3, 3]
+    if np.isnan(mouth_cam).any():
+        node.get_logger().warning("No depth at the mouth landmarks; cannot self-check the tip.")
+    else:
+        d = tip_cam - mouth_cam
+        node.get_logger().info(
+            f"Tool tip relative to mouth (camera frame, m): right={d[0]:+.3f} "
+            f"down={d[1]:+.3f} forward={d[2]:+.3f}; distance={np.linalg.norm(d):.3f}"
+        )
+        if np.linalg.norm(d) > 0.04:
+            node.get_logger().warning(
+                "Tool tip is more than 4 cm from the detected mouth. Check that the "
+                "cup rim is at the mouth, and that /arm/ee/pose, "
+                "tool_frame_to_drink_tip and the camera TF share one frame convention."
+            )
+
     tool_dir = os.path.join(_CONFIG_DIR, tool)
     os.makedirs(tool_dir, exist_ok=True)
     np.save(os.path.join(tool_dir, "reference_landmarks_camera.npy"), reference_points)
     np.save(os.path.join(tool_dir, "reference_head_frame.npy"), reference_head_frame)
     np.save(os.path.join(tool_dir, "tool_tip_transform.npy"), tool_tip_transform)
+    # Raw inputs for offline debugging of the calibration.
+    cv2.imwrite(os.path.join(tool_dir, "calibration_frame.png"), camera_data["rgb_image"])
+    np.save(os.path.join(tool_dir, "calibration_ee_pose.npy"), ee_pose_matrix)
+    np.save(os.path.join(tool_dir, "calibration_base_to_camera.npy"), base_to_camera)
     node.get_logger().info(f"Calibration saved to {tool_dir}")
 
     node.destroy_node()
