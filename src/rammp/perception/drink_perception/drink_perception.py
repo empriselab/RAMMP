@@ -21,8 +21,8 @@ class DrinkPerception():
         # per-frame disk writes dominated the runtime.
         self.debug = debug
         # Binary mask (uint8 0/255) of the handle blob from the latest
-        # run_perception call; all zeros when no blob was found. Streamed to
-        # the GUI as CupInfo.segmentation_mask.
+        # *successful* run_perception call; None when that call found no cup.
+        # Streamed to the GUI as CupInfo.segmentation_mask.
         self.last_mask = None
 
     def pose_to_matrix(self, pose):
@@ -40,7 +40,7 @@ class DrinkPerception():
         return (position, orientation)
 
     def run_perception(self, rgb_image, camera_info, depth_image, base_to_camera_transform):
-
+        self.last_mask = None
         # -----------------------------
         # Color mask
         # -----------------------------
@@ -60,7 +60,6 @@ class DrinkPerception():
         # -----------------------------
         with timer("drink/cluster"):
             cluster_mask = dg.largest_blob(mask, min_area=_MIN_BLOB_AREA)
-        self.last_mask = cluster_mask if cluster_mask is not None else np.zeros_like(mask)
         if cluster_mask is None:
             return None, None
 
@@ -182,6 +181,7 @@ class DrinkPerception():
         x_max, y_max = cluster_pixels.max(axis=0)
         bounding_box = [int(x_min), int(y_min), int(x_max), int(y_max)]
 
+        self.last_mask = cluster_mask
         return self.matrix_to_pose(base_to_tag), bounding_box
 
     def detect_handle_color(self, bgr_image):
