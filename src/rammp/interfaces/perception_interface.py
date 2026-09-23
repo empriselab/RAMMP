@@ -223,17 +223,6 @@ class PerceptionInterface:
                     self.aruco_pose = aruco_pose
                     self.last_bounding_box = bounding_box
 
-            # Mask from this frame only; a 1x1 empty mask when no cup was
-            # detected so the GUI clears its overlay (same convention as the
-            # door-button detector).
-            mask = self._drink_perception.last_mask
-            if mask is None:
-                mask = np.zeros((1, 1), dtype=np.uint8)
-            cup_info.segmentation_mask = self.realsense_interface.bridge.cv2_to_imgmsg(
-                mask, encoding="mono8"
-            )
-            cup_info.segmentation_mask.header = camera_data["header"]
-
             if detected is not None:
                 aruco_pose, bounding_box = detected
                 cup_info.pose = [

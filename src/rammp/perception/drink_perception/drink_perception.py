@@ -16,10 +16,6 @@ class DrinkPerception():
         # handle_mask.png to the working directory. Off by default — those
         # per-frame disk writes dominated the runtime.
         self.debug = debug
-        # Cleaned HSV color mask (uint8 0/255) from the latest run_perception
-        # call, streamed to the GUI as CupInfo.segmentation_mask. Per frame:
-        # all zeros when nothing handle-colored is in view.
-        self.last_mask = None
 
     def pose_to_matrix(self, pose):
         position = pose[0]
@@ -36,7 +32,6 @@ class DrinkPerception():
         return (position, orientation)
 
     def run_perception(self, rgb_image, camera_info, depth_image, base_to_camera_transform):
-        self.last_mask = None
         if base_to_camera_transform is None:
             return None, None
         # -----------------------------
@@ -52,7 +47,6 @@ class DrinkPerception():
 
         with timer("drink/clean_mask"):
             mask = self.clean_mask(mask)
-        self.last_mask = mask
 
         # -----------------------------
         # Back-project every valid-depth mask pixel (vectorized), then cluster
