@@ -205,6 +205,7 @@ class PerceptionInterface:
                     ]
                     cup_info.success = True
         else:
+            detected = None
             for _ in range(num_samples):
                 camera_data = self.realsense_interface.get_camera_data()
                 base_to_camera = self.realsense_interface.get_base_to_camera_transform()
@@ -216,6 +217,9 @@ class PerceptionInterface:
                         base_to_camera,
                     )
                 if aruco_pose is not None:
+                    detected = (aruco_pose, bounding_box)
+                    # Kept for the grasp (get_last_drink_pickup_poses); the
+                    # published CupInfo below reflects this call only.
                     self.aruco_pose = aruco_pose
                     self.last_bounding_box = bounding_box
 
@@ -230,17 +234,18 @@ class PerceptionInterface:
             )
             cup_info.segmentation_mask.header = camera_data["header"]
 
-            if self.aruco_pose is not None:
+            if detected is not None:
+                aruco_pose, bounding_box = detected
                 cup_info.pose = [
-                    float(self.aruco_pose[0][0]),
-                    float(self.aruco_pose[0][1]),
-                    float(self.aruco_pose[0][2]),
-                    float(self.aruco_pose[1][0]),
-                    float(self.aruco_pose[1][1]),
-                    float(self.aruco_pose[1][2]),
-                    float(self.aruco_pose[1][3]),
+                    float(aruco_pose[0][0]),
+                    float(aruco_pose[0][1]),
+                    float(aruco_pose[0][2]),
+                    float(aruco_pose[1][0]),
+                    float(aruco_pose[1][1]),
+                    float(aruco_pose[1][2]),
+                    float(aruco_pose[1][3]),
                 ]
-                cup_info.bounding_box = self.last_bounding_box
+                cup_info.bounding_box = bounding_box
                 cup_info.success = True
                 self.last_drink_poses = self._compute_drink_pickup_poses_from_aruco()
 
