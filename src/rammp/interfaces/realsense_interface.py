@@ -29,9 +29,9 @@ class RealSenseInterface:
         # Top Camera Data
         self.camera_lock = Lock()
         self.camera_header = None
-        self.camera_color_data = None
+        self.camera_color_msg = None
         self.camera_info_data = None
-        self.camera_depth_data = None
+        self.camera_depth_msg = None
 
         self.bridge = CvBridge()
 
@@ -74,28 +74,46 @@ class RealSenseInterface:
         time.sleep(2.0)  # sleep until all subscribers are registered
 
     def rgbd_callback(self, rgb_image_msg, camera_info_msg, depth_image_msg):
-        try:
-            # Convert ROS Image messages to OpenCV images
-            rgb_image = self.bridge.imgmsg_to_cv2(rgb_image_msg, "bgr8")
-            depth_image = self.bridge.imgmsg_to_cv2(depth_image_msg, "32FC1")
-        except CvBridgeError as e:
-            self.node.get_logger().error(f"CvBridge error: {e}")
-            return
-
+        # Only keep the latest messages here; converting every frame at the
+        # camera rate cost ~30% of a Jetson core while no task needed images.
         with self.camera_lock:
-            self.camera_color_data = rgb_image
+            self.camera_color_msg = rgb_image_msg
             self.camera_info_data = camera_info_msg
-            self.camera_depth_data = depth_image
+            self.camera_depth_msg = depth_image_msg
             self.camera_header = rgb_image_msg.header
 
     def get_camera_data(self):
         with self.camera_lock:
+            rgb_image_msg = self.camera_color_msg
+            depth_image_msg = self.camera_depth_msg
+            camera_info = deepcopy(self.camera_info_data)
+            header = deepcopy(self.camera_header)
+        if rgb_image_msg is None:
             return {
-                "rgb_image": deepcopy(self.camera_color_data),
-                "camera_info": deepcopy(self.camera_info_data),
-                "depth_image": deepcopy(self.camera_depth_data),
-                "header": deepcopy(self.camera_header),
+                "rgb_image": None,
+                "camera_info": camera_info,
+                "depth_image": None,
+                "header": header,
             }
+        try:
+            # Convert on demand; the messages are immutable once received, so
+            # the converted arrays are fresh copies for the caller.
+            rgb_image = self.bridge.imgmsg_to_cv2(rgb_image_msg, "bgr8")
+            depth_image = self.bridge.imgmsg_to_cv2(depth_image_msg, "32FC1")
+        except CvBridgeError as e:
+            self.node.get_logger().error(f"CvBridge error: {e}")
+            return {
+                "rgb_image": None,
+                "camera_info": camera_info,
+                "depth_image": None,
+                "header": header,
+            }
+        return {
+            "rgb_image": rgb_image,
+            "camera_info": camera_info,
+            "depth_image": depth_image,
+            "header": header,
+        }
 
     def get_base_to_camera_transform(self):
         with self.camera_lock:
